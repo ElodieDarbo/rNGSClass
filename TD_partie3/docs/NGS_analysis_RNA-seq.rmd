@@ -1,0 +1,481 @@
+---
+title: "TD Analyse de données haut débit dans le contexte du cancer de type léiomyosarcomes."
+author: "Elodie Darbo (elodie.darbo@u-bordeaux.fr)"
+vignette: >
+  %\VignetteIndexEntry{Bioconductor style for PDF documents}
+  %\VignetteEngine{knitr ::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval=FALSE)
+knitr::opts_knit$set(root.dir='/Users/elodiedarbo/Documents/TD_ENSTBB/TD_part2')
+```
+
+
+### Contexte
+
+Les léiomyosarcomes (LMS) sont des cancers mésenchimateux rare des tissus mous qui peuvent se développer dans divers sites anatomiques mais le plus souvent dans l'utérus, le rétropéritoine et les membres. Les LMS sont le sous-type le plus agressif des sarcomes des tissus mous avec jusqu'à 50% des patients développent des métastases durant la première année après le diagnostique. Malheureusement, aucune thérapie ciblée ou immunothérapie n'a montré d'effets thérapeutiques majeurs jusqu'à aujourd'hui. Le patients sont donc traités par résection chirurgicale pour les LMS localisés ou par chimiothérapie classique. Les LMS ont une génétique complexe et seulement un faible nombre de voies de signalisation ont été clairement identifiées étant impliquées dans leur oncogenèse mais n'expliquent pas la diversité des phénotypes. 
+Une possibilité d'amélioration de l'efficacité des traitements serait de pouvoir startifier, regrouper les patients suivant des marqueurs spécifiques d'une succeptibilité particulière. 
+
+### But
+
+Durant ce TD, Nous allons analyser les groupes de patients que nous avons identifiés précédemment lors de l'analyse de variations de nombres de copies.
+
+1. Les patients groupés ont ils des caractéristiques communes ?
+
+Nous allons calculer l'enrichissement en caractéristiques cliniques pour chacun de ces groupes et ensuite évaluer si il y a une différence de survie, c'est à dire si un de ses groupes est atteint d'une tumeur plus agressive que l'autre. 
+
+2. Est ce que la variation du nombre de copies a un impact sur l'expression de ces gènes ?
+
+Nous allons utiliser des données de RNA-seq provenant du TCGA (The Cancer Genome Atlas: https://www.cancer.gov/about-nci/organization/ccg/research/structural-genomics/tcga). Ces données sont brutes, c'est à dire qu'elles n'ont pas été normalisées, nous allons donc procéder à cette normalisation et  regarder si il y a un lien entre le gain ou la perte de copie des gènes et l'expression de ces gènes. 
+
+3. Pouvons nous identifier des voies biologiques impliquées fréquemment et spécifiquement perturbées dans chaque groupe de patients?
+Ces voies biologiques peuvent elles être reliées à la cancérogénèse ?
+
+Nous allons aussi détecter les gènes dont l'expression est significativement différente entre les 2 groupes.
+
+Une fois ces gènes identifiés, nous allons effectuer une analyse fonctionnelle des voies de signalisation, c'est à dire que nous allons évaluer si les gènes dérégulés sont impliqués dans des processus biologiques spécifiques. Pour cela nous allons utiliser un outil en ligne (http://www.webgestalt.org/#).
+
+Toutes les commandes R ainsi que toutes les réponses sont présentes dans ce fichier. Celles-ci sont cachées, vous aurez juste à étendre les sections pour les voir. 
+
+L'idée est que, grâce aux noms des packages et des fonctions spécifiées, vous essayiez par vous mêmes d'écrire les lignes de code et de répondre aux questions. 
+
+**Tips**: Utiliser, dès que vous ne connaissez pas une fonction, l'outil d'aide accessible de plusieurs manières: soit dans le panel en bas à droite de RStudio qui contient un onglet _Help_, soit en tapant dans la console `help("nomDeLaFonction")` ou encore`?NomDeLaFonction`. 
+
+### Les données
+
+Dans data/ vous trouverez:
+
+  - 2 objets de type .RData: 
+    - CNVs_expression.RData qui contient 4 le résultats de détection du nombre de copies dans 100 patients (CN.chr17), annoRow qui contient la position génomique de gènes, clinical qui contient des informations sur les patients et TCGA.counts qui contient les comptes brut de données de RNA-seq de ces mêmes patients.
+    - clinical_CN.RData qui est le fichier d'annotations cliniques auquel nous avons rajouté une appartenance à des clusters en fonction de leur profils d'altérations chromosomiques.
+
+### RStudio
+#### Installation de packages
+
+Pour ce TD nous aurons besoin de certains packages qu'il faut intaller.
+
+**edgeR**: Ce package permet de normaliser des données provenant d'expériences de RNA-seq et d'identifier des gènes siginificativement dérégulés entre deux groupes d'échantillons.
+
+```{r, echo=T}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("edgeR")
+```
+
+#### Setup
+
+Ouvrir RStudio et créer un script (e.g TP_NGS_J3.R) dans lequel vous écrirez les lignes de commandes que vous utiliserez  et les commentaires au fur et à mesure, vous pourrez ainsi vous y référer plus tard si besoin. Ce script devrait être sauvé dans le dossier _scripts/_.
+
+Dans le script nous allons tout d'abord définir le répertoire principal et s'y positionner (`setwd`).
+
+```{r}
+# Définir le répertoire principal votreIdentifiant et CheminJusquAuDosier sont à 
+# modifier pour matcher avec le chemin jusqu'au dossier que vous avez téléchargé.
+setwd("C:/Users/votreIdentifiant/CheminJusquAuDosier") # Windows path
+# ou
+setwd("/home/votreIdentifiant/CheminJusquAuDosier") # Linux/MacOS path
+
+```
+
+#### Charger les données
+Les données ont été pré-calculées et sauvées dans des objets de type .RData présent dans le dossier _data_ ( _clinical_CN.RData_ et _CNVs_expression.RData_), chargez les grâce à la fonction `load`.
+
+```{r, echo=T, eval=T}
+load(file = "data/CNVs_expression.RData")
+load(file = "data/clinical_CN.RData")
+```
+
+4 objets ont été chargés dans votre environnement
+
+<img src="/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/RNA_1.png" alt="drawing" style="width:500px;"/>
+
+### Caractérisation des groupes de patients
+
+#### Calculer l'enrichissement en caractéristiques cliniques
+
+Pour calculer cet enrichissement nous allons utiliser la fonction `fisher.test` et les informations contenues dans `clinical`.
+
+Afficher l'aide pour cette fonction (`?fisher.test`). Quels arguments allez-vous renseigner ? Le but est d'évaluer si il y a une association entre un trait clinique (sexe, differenciation, localisation de la tumeur) et un groupe de patients (clusterA et clusterB).
+
+<details>
+  <summary>Choix des arguments et des données à utiliser</summary>
+```
+Nous allons renseigner les arguments x et y. x va contenir le trait clinique à analyser et y le groupe des patients.
+Nous pourrions utlisiser seulement x si on lui renseigne un table de contingence que nous pourrions obtenir à partir de la fonction 'table' qui est très pratique dans le ce genre d'analyse.
+```
+</details>
+
+  1. Regardons l'association avec le niveau de différenciation des tumeurs. 
+  
+Nous estimerons qu'une différenciation moyenne (score 2) peut être regrouper avec les différenciations fortes (score 1) afin d'obtenir de classe à comparer. Même si le test de Fisher est applicable sur plus de 2 classes il est plus performant dans ce cadre.
+
+Modifions la colonne `Differentiation` de la table `clinical` en changeant les les scores 1 en 2. Pour cela créer un vecteur logique.
+
+<details>
+  <summary>Code</summary>
+  
+```{r, eval=T}
+# afficher la table de contingence en utilisant table
+table(clinical$Differentiation,clinical$CN.clust)
+# créer le vecteur logique
+diff1 <- clinical$Differentiation == 1
+# appliquer le vecteur à la colonne souhaitée pour y modifier les valeurs
+clinical$Differentiation[diff1] <- 2
+# afficher la table de contingence en utilisant table
+table(clinical$Differentiation,clinical$CN.clust)
+```
+
+</details>
+
+En affichant les tables de contingence on a une petite idée du résultat du test, mais est ce significatif ? Calculons la p-valeur avec la fonction `fisher.test`.
+
+<details>
+  <summary>Code</summary>
+  
+```{r, eval=T}
+test <- fisher.test(x=clinical$Differentiation,y=clinical$CN.clust)
+```
+
+</details>
+
+Quelle est la valeur de la p-valeur? Qu'indique t'elle ? Quelle conclusion en tirez-vous pour les patients ?
+
+<details>
+  <summary>Réponse</summary>
+  
+```{r, eval=T}
+print(test)
+```
+
+```
+La p-valeur est faible: 2.437e-07, cela signifie que les classes ne sont pas réparties aléatoirement entre les groupes. Il est admis que qu'une p-valeur est significative si elle est plus petite que 0.01 (1% de chance de dire que les populations sont différentes alors qu'elles sont similaires, c'est à dire qu'un trait ne peut être associé à aucun groupe puisqu'il est réparti équitablement).
+Ce résultat indique que les patients du clusterA ont préférentiellement des tumeurs différenciées.
+```
+
+</details>
+
+  2. Regardons l'association avec la localisation des tumeurs. 
+  
+Nous allons répartir les localisation en 2 groupes, les tumeurs présentent dans le tronc d'une part et celles présentent dans les membres, les extrémités et la paroi abdominale.
+
+Comme précédement nous allons utiliser un vecteur logique, à la place d'utiliser l'égalité `==` nous allons utiliser la différence `!=` et modifier la colonne `Location` en y affectant la valeur `other`.
+
+<details>
+  <summary>Code</summary>
+  
+```{r, eval=T}
+# afficher la table de contingence en utilisant table
+table(clinical$Location,clinical$CN.clust)
+# créer le vecteur logique
+not.trunk <- clinical$Location != "Internal trunk"
+# appliquer le vecteur à la colonne souhaitée pour y modifier les valeurs
+clinical$Location[not.trunk] <- "other"
+# afficher la table de contingence en utilisant table
+table(clinical$Location,clinical$CN.clust)
+```
+
+</details>
+
+En affichant les tables de contingence on a une petite idée du résultat du test, mais est ce significatif ? Calculons la p-valeur avec la fonction `fisher.test`. Quelle est sa valeur? Quelle conclusion en tirez-vous pour les patients ?
+
+<details>
+  <summary>Code</summary>
+  
+```{r, eval=T}
+test <- fisher.test(x=clinical$Location,y=clinical$CN.clust)
+print(test)
+```
+
+```
+La p-valeur est faible: 8.271e-07. Ce résultat indique que les patients du clusterA ont préférentiellement des tumeurs localisées dans le tronc et le cluster B dans les autres localisations
+```
+
+</details>
+
+  3. Regardons l'association avec le sexe des patients.
+
+Ici seul le résultats est fourni. Il n'y a pas besoin de former 2 groupes puisque seulement de catégorie sont présentes (F: Female, M: Male). En utilisant les commandes précédente comme modèle, écrivez la ligne de code permettant de calculer cet enrichissement.
+
+```{r, eval=T,echo=F}
+test <- fisher.test(x=clinical$Sex,y=clinical$CN.clust)
+
+```
+
+```{r, eval=T,echo=T}
+table(clinical$Sex,clinical$CN.clust)
+print(test)
+```
+
+Que peut-on conclure ?
+
+<details>
+  <summary>Réponse</summary>
+  
+```
+La p-valeur est supérieure à 0.01: malgré la table de contingence qui montrait un léger biais de la présence de femmes dans le clusterA, la répartition est aléatoire. Cela peut-être du au nombre plus important de femmes que d'hommes dans l'échantillonage de départ ce qui enlève du pouvoir statistique, il aurait fallu une cohorte plus importante pour pallier à ce défaut.
+
+Nous déduisons de ce test, que le sexe n'est pas un facteur important dans notre étude. 
+```
+</details>
+
+#### Calculer les différences de survie entre les groupes
+
+Nous allons évaluer si les groupes ClusterA et B ont des pronostiques vitaux différents. Pour cela nous allons analyser les courbes de Kaplan Meier.
+  
+Pour interpréter ces courbes référez-vous au site https://towardsdatascience.com/kaplan-meier-curves-c5768e349479 
+
+  
+```{r, echo=F,eval=T,out.width="50%",fig.show="hold"}
+suppressPackageStartupMessages(library(survminer))
+suppressPackageStartupMessages(library(survival))
+
+fit <-survfit(Surv(Time_OS,OS) ~ CN.clust,data=clinical)
+suppressWarnings(print(ggsurvplot(fit, data = clinical,  size = 1,  pval = T,risk.table = TRUE,  risk.table.col = "strata", risk.table.height = 0.3,ylab="Overall Survival",break.time.by=2,surv.median.line = "hv")))
+
+fit <- survfit(Surv(Time_MFS,Meta) ~ CN.clust,data=clinical)
+suppressWarnings(print(ggsurvplot(fit, data = clinical,  size = 1,  pval = T,risk.table = TRUE,  risk.table.col = "strata", risk.table.height = 0.3,ylab="Metastasis Free Survival",break.time.by=2,surv.median.line = "hv")))
+```
+
+<details>
+  <summary>Interprétation</summary>
+
+```
+Dans les 2 cas, les différences ne sont pas significatives (p-valeur > 0.01). Par contre en ce qui concerne la survie globale, nous pouvons observer des comportements différents. Les patients du ClusterB semble décéder plus rapidement que les patients du clusterA, en effet à 2 ans après le diagnostic, une 20 aine de patients du clusterB sont décédés alors que 1 est décédé à ce même moment. Les patients du clusterA semblent donc vivre plus longtemps mais après 7 ans environ, le nombre de décès augmente fortement alors que les patients du clusterB une fois passé ce délai ne décèdent plus. Nous voyons aussi que pour beaucoup des patients du groupe A, nous n'avons pas assez de recul puisque la dernière consultation a eu lieu avant 7 ans.
+Il semble donc que les tumeurs du groupe B sont aggréssives plus rapidement mais si les patients passent ce délai alors leur rique diminue. Les tumeurs du groupe A se développent plus doucement mais ne sont néanmoins pas moins agressives. 
+```
+
+</details>
+
+#### Intégrer les différents résultats
+
+Que concluez-vous de tout ces résultats ?
+
+<details>
+  <summary>Interprétation</summary>
+```
+Pour résumé, nous avons appris que de séparer les patients en fonction de leur profil de variation chromosomique sur le chromosome 17 nous permet de détecter des groupes de patients ayant des caractéristiques différentes:
+
+ClusterA: tumeur différenciée, localisée dans le tronc se développant lentement mais provocant aussi le décès des patients
+
+ClusterB: tumeur non différenciée, localisée dans les membres, les extrémités et la paroi abdominale se développant très rapidement provoquant le décès en un temp très court (< 2ans).
+
+Nous pouvons émettre l'hypothèse que les réarrangements chromosomiques induisent un phénotype particulier suggérant un mécanisme d'oncogénèse différent. Les cellules d'origine pourraient être différentes ce qui est suggéré par la localisation différente des tumeurs. Ces informations sont importantes puisque pour le moment les LMS sont traités comme une maladie unique et homogène. Différenncier les patients pourrait permettre de leur proposer des traitements spécifiques et donc plus performants.
+```
+</details>
+
+### Analyse de l'expression différentielle des gènes
+
+Nous allons utiliser l'objet `TCGA.counts` qui contient le nombre de reads alignés sur chaque gène (lignes) dans 27 patients (colonnes) extraits de la cohorte précédente et le classement des patients contenus dans `clinical`.
+
+Nous souhaitons normaliser les données (voir introduction au TD) et identifier des gènes dont l'expression diffère entre les 2 groupes. Nous allons utiliser le package `edgeR` pour effectuer ces traitements.
+
+<details>
+  <summary>Informations sur edgeR (d'après https://www.bioconductor.org/packages/release/bioc/vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf )</summary>
+**1. La normalisation n'est nécessaire que pour les effets spécifiques à l'échantillon**
+edgeR s'intéresse à l'analyse différentielle d'expression plutôt qu'à la quantification des niveaux d'expression. Il s'intéresse aux changements relatifs des niveaux d'expression entre les conditions, mais pas directement à l'estimation des niveaux d'expression absolus. Cela simplifie grandement les influences techniques à prendre en compte, car tout facteur technique qui n'est pas lié aux conditions expérimentales doit être éliminé de toute analyse d'expression différentielle. Par exemple, on peut généralement s'attendre à ce que le nombre de reads soit proportionnel à la longueur ainsi qu'à l'expression pour n'importe quelle transcription, mais edgeR n'a généralement pas besoin de s'adapter à la longueur des gènes, car celle-ci a la même influence relative sur le nombre de lectures pour chaque échantillon d'ARN.
+**2.Profondeur de séquençage**
+Le facteur technique le plus évident qui influe sur le nombre de reads, autre que le niveau d'expression des gènes, est la profondeur de séquençage de chaque échantillon d'ARN. edgeR ajuste toute analyse d'expression différentielle en fonction des différentes profondeurs de séquençage représentées par les différentes tailles de librairie. Ce facteur fait partie de la procédure de modélisation de base et est automatiquement pris en compte dans les calculs de changement de logFoldChange ou de p-valeur. Il est toujours présent et ne nécessite aucune intervention de l'utilisateur.
+**3.Taille efficace des libraires**
+La deuxième influence technique la plus importante sur l'expression différentielle est celle qui est moins évidente. La séquence d'ARN fournit une mesure de l'abondance relative de chaque gène dans chaque échantillon d'ARN, mais ne fournit aucune mesure de la production totale d'ARN par cellule, en d'autres termes, la séquence d'ARN mesure l'expression relative plutôt que l'expression absolue. Cela devient important pour les analyses d'expression différentielle lorsqu'un petit nombre de gènes sont très fortement exprimés dans certains échantillons, mais pas dans d'autres. Si une petite proportion de gènes hautement exprimés consomme une proportion substantielle de la taille totale de la banque pour un échantillon particulier, cela entraînera un sous-échantillonnage des gènes restants pour cet échantillon. À moins que cet effet ne soit corrigé, les gènes restants peuvent sembler faussement régulés à la baisse dans cet échantillon.
+
+</details>
+
+
+  1. Trier la table `clinical` pour qu'elle ne contienne plus que les patients pour lesquels nous disposons des données d'expression.
+
+Utiliser la fonction `match` pour que le nom des lignes de `clinical` correspondent aux noms des colonnes de `TCGA.counts`. Regarder l'aide de cette fonction pour en comprendre le fonctionnement. 
+
+- Tout d'abord créer une variable contenant le résultat de la fonction `match`
+
+<details>
+  <summary>Code: la fonction match</summary>
+
+```
+D'après l'aide, la fonction match prend au moins 2 arguments qui correspondent à 2 vecteurs à comparer, ici le nom des lignes des 2 tables. La fonction retourne un vecteur de même taille que le premier argument comprenant des NA et des indices. Les positions du vecteur obtenu correspondent aux positions du premier vecteur, si une position contient un NA, cela signifie que l'élément à cette position n'a pas été trouvé dans le second vecteur. Si un indice est présent alors cela signifie que l'élément à cette position est présent dans le second vecteur à l'indice indiqué.
+```
+
+```{r eval=T}
+m <- match(colnames(TCGA.counts),row.names(clinical))
+```
+
+ </details>
+
+Utiliser cette variable pour trier et ordonner les 2 objets.   
+
+Nous ne voulons garder que les lignes étant présentes dans les 2 tables, le vecteur `m` contient des `NA` si la position n'est présente que dans le premier vecteur. 
+
+Pour trier et ordonner la table `clinical`, nous allons utiliser les indices présent dans `m`. Il va falloir éliminer les `NA` grâce à la fonction `na.omit`.  
+
+
+<details>
+  <summary>Code: Trier et ordonner la table vcfC</summary>
+
+```{r eval=T}
+clinical <- clinical[na.omit(m),]
+dim(clinical)
+```
+ </details>
+
+Vérifier que tout s'est bien passé en comparant les noms des lignes des nouvelles tables avec la fonction `all.equal`.
+
+<details>
+  <summary>Code: Vérification</summary>
+
+```{r eval=T}
+all.equal(colnames(TCGA.counts),row.names(clinical))
+```
+ </details>
+
+  2. Détection des gènes différentiellement exprimés avec les fonctions du package `edgeR` (charger la librarie)
+
+
+En suivant le protocole ci-dessous, écrivez le code pour lancer l'analyse en utilisant les objets dont vous disposez. Aidez vous de l'aide des fonctions que vous ne connaissez pas. Essayer de comprendre ce que font les fonctions.
+
+**Notes**: la première ligne `read.delim` n'est pas nécessaire puisque nous avons déjà un objet contenant des comptes de reads par gène (à utiliser à la place de `x`). `group` doit contenir les groupes de patients définis dans `clinical`.
+
+![Source: https://www.bioconductor.org/packages/release/bioc/vignettes/edgeR/inst/doc/edgeRUsersGuide.pdf](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/edgeR.png)
+![](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/edgeR_2.png)
+
+<details>
+  <summary>Code</summary>
+
+```{r eval=T}
+library(edgeR)
+# Définir les groupes
+group <- factor(clinical$CN.clust)
+# construire l'objet DGEList
+edger.list <- DGEList(counts=TCGA.counts, group=group)
+# Créer un filtre pour garder les gènes ayant au minimum 5 reads dans au moins un échantillon
+# et au moins 10 reads en sommant l'ensemble des échantillons
+keep <- filterByExpr(edger.list,min.count = 5, min.total.count = 10)
+# Filtrer la table de comptes
+counts.filt <-  TCGA.counts[keep,]
+# Recréer l'objet DGEList avec la nouvelle table filtrée
+edger.filt <- DGEList(counts=counts.filt, group=group)
+# Calculer les facteurs de normalisation
+edger.norm <- calcNormFactors(edger.filt)
+# Créer un modèle en fonction des groupes de patients
+design <- model.matrix(~group)
+# Estimer la dispersion et normalise en fonction de la taille 
+# effective des librairies
+edger.norm <- estimateDisp(edger.norm,design)
+# Calculer les tests statistiques pour évaluer la significativité 
+# des différences d'expression du groupe B par rapport au groupe A
+edger.BvsA <- exactTest(edger.norm)
+# Récupérer le résultat avec tous les gènes et le transformer en data.frame
+edger.BvsA <- as.data.frame(topTags(edger.BvsA,n = Inf))
+```
+ </details>
+
+  3. exploration des résultats
+  
+- Afficher les premières lignes de la table de résultats `edger.BvsA`. Que contiennent les colonnes ?
+
+<details>
+  <summary>Code et réponse</summary>
+
+```{r eval=T}
+head(edger.BvsA)
+```
+
+```
+- Le nom des lignes contient de nom des gènes
+- LogFC correspond au log ratio des moyennes normalisées entre le groupe B et A, une valeur positive indique que le gène est plus exprimé dans B que dans A.
+- logCPM: moyenne sur tout l'échantillon des comptes normalisés (CPM:Count Per Million) et transformé en logarithme.
+- PValue correspond au résultat du test statistique appliqué par edgeR
+- FDR (False Discovery Rate) est une correction de la p-valeur. En effet, le test est appliqué plusieurs milliers de fois, la probabilité d'observé un différence du au hasard augmente alors, il faut alors corriger cette valeur pour le multi-testing. C'est cette valeur que nous utilisons pour signifier la significativité. Comme la p-valeur, cette valeur doit-être inférieure à 0.01, et plus elle est faible plus elle est significative.
+```
+ </details>
+
+- Quel est le gène le plus sur-exprimé et le plus sous-exprimé dans le cluster B par rapport au groupe A? Quelles sont leur fonction? Est-ce pertinent ?
+
+<details>
+  <summary>Réponse</summary>
+
+```
+En observant le début de la table, nous voyons que les gènes sont ordonnés par la FDR. Le logFC nous indique que SRPX2 (https://www.genecards.org/cgi-bin/carddisp.pl?gene=SRPX2) est le plus significativement sur-exprimé (impliqué dans la migration cellulaire et l'angiogénèse, 2 caractéristiques essentielle à l'oncogénèse et à la formation de métastase) et WFDC2 (https://www.genecards.org/cgi-bin/carddisp.pl?gene=WFDC2) le plus significativement sous-exprimé (impliqué dans le cancer ovarien).
+```
+ </details>
+
+Nous ne pouvons pas regarder gène par gène les fonctions potentiellement affectées ... nous allons donc procéder à l'analyse fonctionnelle de gènes dérégulés.
+
+  3. Analyse fonctionnelle avec l'outil en ligne WEB-based GEne SeT AnaLysis Toolkit (http://www.webgestalt.org/#)
+  
+- D'abord il faut créer les fichiers contenant les informations de notre analyse.
+
+Un fichier contenant une matrice contenant dans la première colonne le nom des gènes et dans la seconde le logFC. Créer une data.frame avec `data.frame`, et sauver la matrice dans un fichier grâce à la fonction `write.table`.
+
+<details>
+  <summary>Code</summary>
+
+```{r eval=T}
+results <- data.frame(gene=row.names(edger.BvsA), logFC=edger.BvsA$logFC)
+
+head(results)
+
+write.table(results, # objet à écrire
+            # chemin et nom du fichier à écrire
+            file="differentially_expressed_genes.tab", 
+            sep="\t", # type de séparateur, ici tabulation
+            # ne pas écrire le nom de colonnes, des lignes et ne
+            # pas mettre de guillemets si il s'agit de caractères
+            row.names=F, col.names=F, quote=F 
+            )
+```
+ </details>
+
+Deux fichier contenant la liste des gènes significativement sur-exprimés ou sous-exprimés dans le groupe B. Les écrire dans un fichier avec la fonction `writeLines`
+
+Vous devez utiliser des vecteurs logiques sur les colonnes `logFC` et `FDR`.
+
+Nous allons être stringent et ne garder que les gènes dont le logFC absolu est
+supérieur à 3.
+
+<details>
+  <summary>Code</summary>
+
+```{r eval=T}
+# Gènes sur-exprimés
+is.sig <- edger.BvsA$FDR < 0.01
+is.up <- edger.BvsA$logFC > 3
+up.genes <- row.names(edger.BvsA)[is.sig & is.up]
+
+# écrire le résultat dans un fichier
+writeLines(up.genes,
+           "up_genes.txt")
+
+# Gènes sous-exprimés
+is.sig <- edger.BvsA$FDR < 0.01
+is.down <- edger.BvsA$logFC < -3
+down.genes <- row.names(edger.BvsA)[is.sig & is.down]
+
+# écrire le résultat dans un fichier
+writeLines(down.genes,
+           "down_genes.txt")
+
+```
+ </details>
+
+- Analyser des listes de gènes
+
+![](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/fun_1.png)
+- Analyser GSEA
+
+![](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/fun_2.png)
+En testant differentes bases de données et les différentes méthodes vous allez accumuler beaucoup d'information sur ces gènes.
+
+Quels sont les voies biologiques les plus dérégulées ? Y a t'il des positions chromosomiques enchies en gènes dérégulés ?
+
+Vous pouvez aussi tester d'autres outils en ligne (test hypergéométrique: https://biit.cs.ut.ee/gprofiler/gost, https://maayanlab.cloud/Enrichr/)
+
+**Exercice par groupe**: Ecrivez un rapport où vous décrirez les groupes de patients en accumulant toutes les informations que vous avez trouvées au long des TD (CNV, survie, caractéristiques, voies biologiques). Par exemple: Les voies biologiques impactées pourraient-elles avoir un impact sur la phisiologie de la tumeur? Pouvez vous faire un lien avec les informations cliniques des patients de ces groupes ? N'hésitez pas à rechercher des informations sur le net (sur les sarcomes, sur les voies biologiques etc.).  
+Argumentez chacunes de vos propositions.
+
+**Bonus**: En utlisant les objets `CN.chr17` et `edger.BvsA`, identifier des gènes qui sont à la fois gagnés et sur-exprimés, ou perdus et sous-exprimés. Vous pouvez faire, par groupe, la fréquence de gain (3 ou 4) ou de perte (0 ou 1) et comparer cette fréquence au logFC.
+
+Envoyez-moi ce document avant le **15/01/2021**.
+
+

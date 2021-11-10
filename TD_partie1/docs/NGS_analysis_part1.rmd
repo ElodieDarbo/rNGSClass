@@ -1,0 +1,417 @@
+---
+title: "TD Analyse de données haut débit dans le contexte du cancer de type léiomyosarcomes."
+author: "Elodie Darbo (elodie.darbo@u-bordeaux.fr)"
+vignette: >
+  %\VignetteIndexEntry{Bioconductor style for PDF documents}
+  %\VignetteEngine{knitr ::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval=FALSE)
+```
+
+
+
+
+# Contexte
+
+Les léiomyosarcomes (LMS) sont des cancers mésenchimateux rares des tissus mous qui peuvent se développer dans divers sites anatomiques mais le plus souvent dans l'utérus, le rétropéritoine et les membres. Les LMS sont le sous-type le plus agressif des sarcomes des tissus mous avec jusqu'à 50% des patients développent des métastases durant la première année après le diagnostique. Malheureusement, aucune thérapie ciblée ou immunothérapie n'a montré d'effets thérapeutiques majeurs jusqu'à aujourd'hui. Le patients sont donc traités par résection chirurgicale pour les LMS localisés ou par chimiothérapie classique. Les LMS ont une génétique complexe et seulement un faible nombre de voies de signalisation ont été clairement identifiées étant impliquées dans leur oncogenèse mais n'expliquent pas la diversité des phénotypes. 
+Une possibilité d'amélioration de l'efficacité des traitements serait de pouvoir stratifier, regrouper les patients suivant des marqueurs spécifiques d'une succeptibilité particulière. 
+
+# But
+
+Durant ce TD, nous allons procéder aux traitements primaires des données issues de séquençage du génome entier (Whole Genome Sequencing: WGS) du tissu sain et tumoral d'un patient atteint de LMS. Le but est de préparer les données afin de pouvoir détecté des variations succeptibles de provoquer l'apparition du léiomyosarcome.
+
+
+Vous aurez dans ce TD toutes les commandes R ainsi que toutes les réponses. Celles-ci sont cachées, vous aurez juste à étendre les sections pour les voir. 
+
+L'idée est que, grâce aux noms des packages et des fonctions spécifiées, vous essayiez par vous mêmes d'écrire les lignes de code et de répondre aux questions. 
+
+**Tips**: Utiliser, dès que vous ne connaissez pas une fonction, l'outil d'aide accessible de plusieurs manières: soit dans le panel en bas à droite de RStudio qui contient un onglet _Help_, soit en tapant dans la console `help("nomDeLaFonction")` ou encore`?NomDeLaFonction`. 
+
+
+# Les données et packages
+
+Télécharger les données nécessaires au TD sur :
+
+Dans data/ vous trouverez:
+
+  - 6 fichiers _\*.fastq.gz_ correspondant à 3 echantillons provenant d'un même individu dont l'organisation est décrite dans les fichiers tabulés _samples\_LMS25.tab_ et _samples\_LMS25R.tab_. 
+  - 2 fichiers correspondant au génome de référence d'Homo sapiens ( _chr17.fa_ ) et son (index _chr17.fa.fai_), Un fichier d'annotation GTF contenant les coordonnées génomiques des gènes ( _ucsc.hg38.chr17.symbol.gtf_ ) ainsi qu'un fichier bed ayant servi à sous-échantillonner le données ( _coords\_genic.bed_ ).
+
+Dans scripts vous trouverez:
+
+  - un fichier _setup_part1.R_ qu'il faudra jouer afin d'intaller les packages présent dans les dépots CRAN ou BioConductor que nous allons utiliser.
+
+# Reads : Qualité, alignement et quantification
+### RStudio
+
+Ouvrir RStudio et créer un script (e.g TP_NGS_J1.R) dans lequel vous écrirez les lignes de commandes que vous utiliserez  et les commentaires au fur et à mesure, vous pourrez ainsi vous y référer plus tard si besoin. Ce script devrait être sauvé dans le dossier _scripts/_.
+
+Dans le script nous allons tout d'abord définir le répertoire principal et s'y positionner (`setwd`).
+
+```{r}
+# Définir le répertoire principal votreIdentifiant et CheminJusquAuDosier sont à 
+# modifier pour matcher avec le chemin jusqu'au dossier que vous avez téléchargé.
+setwd("C:/Users/votreIdentifiant/CheminJusquAuDosier") # Windows path
+# ou
+setwd("/home/votreIdentifiant/CheminJusquAuDosier") # Linux/MacOS path
+
+```
+
+
+Charger le script _setup_part1.R_ (`source`) qui est dans le dossier _scripts_ afin de mettre à disposition les packages.
+
+
+
+<details>
+  <summary>Code: Installation de packages</summary>
+
+```{r}
+source("scripts/setup_part1.R")
+```
+ </details>
+
+
+
+
+### Projet d'analyse QUASR (`library(QuasR)`)
+
+QUASR est un outil polyvalent utilisé pour l'analyse qualité des reads et leur alignement sur une séquence de référence. QUASR propose RBowtie pour un alignement sans gap ou SpliceMap pour un alignement avec gap.
+
+1. Nous allons d'abord modifier le fichier _samples\_LMS25.tab_ (dans le répertoire _data_) qui permettra de renseigner le chemin vers les fichiers _\*.fastq.gz_ depuis votre repertoire de travail. 
+  
+  - Stocker le contenu du fichier tabulé dans une variable (`read.table`, `read.delim`) 
+
+
+
+<details>
+  <summary>Code: Charger la table et l'afficher</summary>
+
+```{r modifTargets, message=F, warning=F}
+  # charger le fichier associant les noms de fichier fastq aux échantillons
+  targets <- read.delim("data/samples_LMS25.tab") # sep="\t" et header=T par défaut
+  # afficher la table
+  targets
+```
+
+</details>
+
+
+
+
+  - Pourquoi avons-nous 2 fichiers par échantillons ? 
+
+
+<details>
+  <summary>Réponse</summary>
+  
+Le nom des fichiers nous donnent un indice, il s'agit d'une expérience de séquençage en paired-end, c'est à dire que les 2 côtés du fragment ont été séquencés. Nous avons donc un read provenant de chacun des bords du fragment stockés dans 2 fichiers différents.
+  
+</details>
+
+
+  - D'après la colonne SampleName, à partir de quels tissus a été séquencé l'ADN? Pourquoi avons nous besoin de ces deux tissus dans le cadre de la recherche de variants ?
+
+
+<details>
+  <summary>Réponse</summary>
+
+Il faut savoir qu'environ 1/1000 nucléotide est différent entre 2 individus. Nous alignons nos reads sur un génome de référence, nous nous attendons donc a une variation naturelle importante entre nos échantillons et la référence. Ici, notre but sera de détecter les variations qui pourraient expliquer le développement de la tumeur et qui ne sont donc pas présentes dans le tissu normal. Nous parlerons dans ce cas de variations somatiques en opposition avec les variations germinales présentes dans toutes les cellules saines de l'individu. La comparaison des 2 tissus nous permettra donc de filtrer les variations germinales.
+
+</details>
+
+
+  - Identifier les colonnes où se trouvent les noms des fichiers contenant les reads et ajouter le chemin nécessaire à ces noms (`paste`, `file.path`) car la fonction d'alignement du package QuasR va lire dans ce fichier à partir du répertoire où se trouve ce fichier.
+
+
+<details>
+  <summary>Code: Changer le chemin des fichier et afficher le résultats</summary>
+```{r}
+# file.path est un wrapper de paste avec des options appropriées
+targets$FileName1 <- file.path("data",targets$FileName1)
+targets$FileName2 <- file.path("data",targets$FileName2)
+# ou targets$FileName1 <- paste("data",targets$FileName1,sep="/")
+# afficher le contenu de targets pour voir si tout c'est bien passé
+targets
+```
+</details>
+
+
+  - Ecrire le tableau modifié dans un nouveau fichier tabulé (e.g. _QuasR\_samples.tab_) dans le répertoire courant (`write.table`).
+
+
+<details>
+  <summary>Code: Ecrire la table</summary>
+```{r}
+write.table(targets, "QuasR_samples.txt", row.names=FALSE, quote=FALSE, sep="\t")
+```
+</details>
+
+
+2. Alignement
+
+  - Regarder le début d'un des fichier fastq afin de voir à quoi ressemble les données (`readLines(..., n=4)`), nous apprenons par exemple que le read a une longueur de 129 bp ce qui est relativement long. Nous apprenons aussi qu'il s'agit du premier read dans la paire.
+
+<details>
+  <summary>Code</summary>
+
+```{r readFastq, message=F, warning=F}
+# Nous utilisons le chemin vers le premier fichier fastq
+targets$FileName1[1]
+readLines(targets$FileName1[1], n=4)
+```
+</details>
+
+  - Regarder la documentation pour la fonction `qAlign` qui va permettre d'aligner les reads sur notre séquence de référence (` ?qAlign`). 
+  - Quels sont les arguments à renseigner ? 
+    
+  <details>
+    <summary>Réponse et code</summary>
+  
+  **_sampleFile_** qui correspond au chemin vers le fichier QuasR_samples.txt, **_genome_** qui correspond au chemin vers le fichier chr17.fa, il pourrait s'agir d'un objet de type `BSgenome` qu'on peut télécharger depuis BioConductor (BSgenome.Hsapiens.UCSC.hg38), NB: Nous travaillons sur une version de génome Hg38.
+    ```{r}
+# Arguments nécessaires à qAlign
+sampleFile <- "QuasR_samples.txt"
+genomeFile <- "data/chr17.fa"
+# Indiquer où stocker les résultats
+results <- "./results" 
+    ```
+    
+  </details>
+
+  - Quel aligneur utiliser et pourquoi ? 
+
+  <details>
+    <summary>Réponse</summary>
+  
+  Nous utilisons **_RBowtie_** car nous sommes en présence de reads provenant d'expériences WGS, les reads devraient s'aligner de façon uniforme sur tout le génome. Le phénomène de splicing ne se passe que sur les transcrits. Dans ce cas là il faudrait utiliser un autre aligneur.
+    
+  </details>
+    
+    
+  - Quels sont les paramètres à utiliser ? 
+    
+    
+  <details>
+    <summary>Réponse</summary>
+    
+  Nous gardons la plupart des paramètres par défaut, **_maxHits_** avec un seuil à 1 permet de ne garder que les reads qui s'alignent exactement 1 fois, nous avons un séquençage paired-end, **_paired_** doit être spécifié pour indiquer la façon dont ont été séquencés les fragments, ici en forward/reverse. **_alignmentsDir_** qui spécifie où les fichiers d'alignement BAM vont être écrits.
+ 
+  </details>
+    
+  - Lancer le calcul et stocker le résultat dans une variable (e.g. qproj.LMS25TC)
+  
+**ATTENTION**: n'oubliez pas de charger la librairie !
+
+<details>
+  <summary>Code: Lancer l'alignement</summary>
+```{r qAlignlaunch, message=F, warning=F}
+# Lancer l'alignement
+qproj.LMS25TC <- qAlign(sampleFile, aligner="Rbowtie", genome=genomeFile, maxHits=1,
+  projectName="LMS25TC",alignmentsDir=results, paired="fr")
+```
+</details>
+
+  - Pendant que le temps de calcul, je vous invite à aller regarder la documentation (https://www.bioconductor.org/packages/release/bioc/vignettes/QuasR/inst/doc/QuasR.html) et rechercher quelles fonctions nous pourrions utiliser pour évaluer la qualité de l'alignement.
+    
+```{r qProject, message=F, warning=F}
+# Afficher le contenu de la variable
+qproj.LMS25TC
+```
+    
+  - Que contient l'objet que vous venez de créer ? 
+  <details>
+      <summary>Réponse</summary>
+  
+  En gros, l'objet contient les informations sur le traitement qui a été fait: le nom des fichiers contenant les reads ainsi que le type d'encodage de la qualité des reads, le chemin vers les fichiers d'alignement de type bam et la commande qui a été lancée. Cet objet ne contient réellement aucune données de séquençage ou d'alignement.
+  
+  </details>
+
+    
+3. Statistiques et qualité
+
+  - Nous allons d'abord regarder la proportion de reads alignés grâce à la fonction `alignmentStats`. Calculer le pourcentage de reads qui ont été alignés (attention à la classe de l'objet). 
+
+  <details>
+       <summary>Code: Calcul des statistiques d'alignement</summary>
+
+    ```{r alignstats, message=F, warning=F}
+alignstats <- alignmentStats(qproj.LMS25TC)
+# check the class of the object
+class(alignstats)
+# En R nous préférons manipuler des data.frame qui sont plus simples que les matrices 
+# par exemple en pouvant utiliser $ pour appeler les colonnes.
+alignstats <- as.data.frame(alignstats)
+alignstats$percent.align <- alignstats$mapped/(alignstats$mapped+alignstats$unmapped)
+alignstats
+    ```
+  </details>
+
+  - Est-ce un résultat convenable ? Y a-il une autre information à noter ? Si vous ne voyez pas nous y reviendrons plus tard.
+    
+  - Utiliser la fonction pour l'analyse de la qualité de l'alignement (`qQCReport`): 
+    
+  <details>
+      <summary>Code: Lancer l'analyse de qualité</summary>
+
+    ```{r QCreport,eval=F} 
+# pdfFilename comporte le chemin et le nom du fichier qui 
+# contiendra le rapport.
+qQCReport(input=qproj.LMS25TC,pdfFilename="results/quasr_qc_reports_LMS25TC.pdf")
+    ```
+  </details>
+
+
+  - Regarder et commenter chaque figure du rapport (la documentation de QuasR et ce que nous avons vu durant la courte introduction ou encore dans le dossier _docs_ vous trouverez une petite présentation peuvent aider si besoin)
+  - Pensez-vous qu'il y aurait besoin de nettoyer les reads ? Pourquoi ?
+      
+  <details>
+      <summary>Réponse</summary>
+  
+  Ce choix peut être déterminé grâce aux premiers plots montrant la distribution de la qualité de séquençage des bases (axe Y) à chaque position du read (axe X). Les couleurs du plot sont informatives puisque une distribution de scores se trouvant dans la zone verte montrera une bonne qualité, la zone orange une qualité moyenne (souvent trop basse pour une étude de variants, en effet nous devons avoir confiance aux base que l'on étudie), la zone rouge contiendra les positions où il y a eu un problème, à enlever en toutes circonstances. En fait la zone verte indique des score de qualité supérieur à 30, toutes nos positions montrent des scores de qualité très haut. On peut continuer.
+  
+  </details>
+
+  - Quelle est la taille moyenne des fragments qui ont été séquencés ?
+
+  <details>
+        <summary>Réponse</summary>
+        
+  La réponse est dans les derniers plots: environs 300 paires de bases. Il ne s'agit pas de la taille des reads mais bien de la taille du fragment de départ.
+  
+  </details>
+
+  - Que pensez vous du pourcentage d'alignements uniques ?
+      
+  <details>
+    <summary>Réponse</summary>
+        
+  Il est de 100%, ayant utilisé l'option `maxHit` permettant de garder uniquement les reads alignés une seule fois, c'était attendu.
+  
+  </details>
+
+  - Que montrent les barplots de la page 7 ? Indice: Il s'agit de variations, de purines et de pyrimidines.
+
+  <details>
+    <summary>Réponse</summary>
+        
+  Ces barplots montrent les differences entre les bases contenu dans les reads et le génome de référence. Les pourcentages sont sensiblement les mêmes dans le tissu normal et dans la tumeur, cela vous parrait il normal ? (Réponse plus haut) De plus, les différences entre la base attendue (génome de référence, axe des x) et celle des reads (couleur) ne semblent pas aléatoires. En effet, nous avons plus souvent un G qu'un T ou un C quand nous attendions un A, de la même façon, nous trouverons plus souvent un T qu'un A ou un G quand nous attendions un C. En fait, nous observons dans les 2 cas une plus forte proportion de différences de type transition (purine > purine (A,G), pyrimidine > pymidine (C,T)) que de transversions (purine > pyrimidine et vice-versa). Ce phénomène est bien connu et s'explique par le fait qu'une transition est plus facile chimiquement à réaliser qu'une transversion. Les structures chimiques étant semblable. D'après la littérature, ce rapport passe de 2 à 3 dans les régions codantes. En effet une transversion est plus susceptible de modifier l'acide aminé et se retrouve éliminée par la sélection naturelle. La connaissance de ce rapport est utilisé dans les modèles d’évolution moléculaire comme le modèle de Kimura. Il s'agit aussi d'un indicateur de qualité de séquençage haut débit. Si le rapport n'est pas retrouvé, il y a fort à parier que des erreurs de séquences se sont produites. 
+
+  </details>
+
+4. Visualisation
+
+  - Afin de pouvoir visualiser les reads, nous devons faire un zoom, nous allons donc définir une région d'intérêt où se trouve par exemple le gène MYOCD qui est un gène fréquemment altéré dans les LMS. Je vous propose d'aller chercher ces coordonnées génomiques sur le genome browser du UCSC: https://genome.ucsc.edu/cgi-bin/hgTracks?hgsid=970549775_NLdHNiRxooaHkagqalgrDFj65Jz9.
+  - Nous allons utiliser la fonction `GRanges` pour construire un objet contenant ces coordonnées et les étendre de 200 Kb en amont et en aval. Ce type d'objet permet de manipuler facilement les intervalles génomiques et est utilisé par de nombreux outils bioinformatiques. 
+
+  <details>
+    <summary>Code: Créer un objet de type GRanges</summary>
+    ```{r}
+# définir une région d'intérêt: vous auriez du trouver chr17:12666189-12763644
+coords <- GRanges("chr17",ranges = IRanges(start = 12666189-200000, end = 12763644+200000))
+# Nous pouvons accéder aux différents éléments de l'objet grâce à des fonctions dédiées:
+# end(coords), start(coords), seqnames(coords), width(coords) etc ...
+    ```
+  </details>
+
+  - Nous allons utiliser la librarie _Gviz_ qui utilise le chemin vers les fichiers bam pour traiter les données ainsi que le fichier d'annotation GTF _ucsc.hg38.chr17.symbol.gtf_ présent dans _data_.
+  - Créer un vecteur contenant le nom des fichiers *.bam à analyser sans oublier d'y rajouter le chemin si besoin (`list.files`, `paste` ou `file.path`)
+
+  <details>
+    <summary>Code: Charger les noms des fichiers d'alignement et les afficher</summary>
+
+    ```{r}
+# récupérer les noms des fichiers bam
+bam_files <-  list.files("results",".bam$",full.names = T)
+# vérifier que l'on a récupérer les bons noms de fichiers et quelle est 
+# leur position dans le vecteur
+bam_files
+    ```
+  </details>
+
+
+  - Les plots créés par Gviz sont très personnalisables, si ça vous intéresse, voici le lien vers la doc: https://www.bioconductor.org/packages/devel/bioc/vignettes/Gviz/inst/doc/Gviz.html 
+
+```{r}
+# Charger la librarie
+library(Gviz)
+# Créons les tracks ou panels que nous voulons afficher
+
+# 1. les coordonnées génomiques de la région affichée
+axisTrack <- GenomeAxisTrack()
+# 2. un idéogramme avec une fenêtre permettant de localiser la région sur le chromosome
+itrack <- IdeogramTrack(genome = "hg38", chromosome = "chr17")
+# 3. Les donnée provenant de la tumeur
+dTrack1 <- DataTrack(range=bam_files[2], name="Tumor", type="h",ucscChromosomeNames=T,chromosome="chr17",windows=-1)
+# 4. les données provenant du tissu normal
+dTrack2 <- DataTrack(range=bam_files[1], name="Normal", type="h",ucscChromosomeNames=T,chromosome="chr17",windows=-1)
+# 5.les modèles des transcripts
+txTrack <- GeneRegionTrack("data/ucsc.hg38.chr17.symbol.gtf", name="Transcripts", showId=TRUE,ucscChromosomeNames=T,transcriptAnnotation = "geneid")
+```
+
+  - Afichons le résultats avec la fonction `plotTracks`.
+
+  <details>
+    <summary>Code: Afficher le plot</summary>
+    
+    ```{r}
+plotTracks(list(itrack,axisTrack, dTrack2, dTrack1, txTrack),
+           chromosome="chr17",from = start(coords), to = end(coords))
+
+    ```
+  </details>
+
+  - D'après vous, à quoi correspond l'échelle de l'axe des ordonnées ? 
+  - Pourquoi est-elle différente entre la tumeur et le tissu normal ? Indice: Cette différence peut être due à deux facteurs: une raison biologique: la région en question a été dupliquée (on parle de gain de copie ou d'amplification dans ce cas là) dans la tumeur ou une raison expérimentale: l'échantillon tumoral a été plus séquencé que l'échantillon normal. D'après les analyses précédentes, quelle serait la meilleure hypothèse?
+
+# Exercice
+
+Je vous propose de créer un alignement (dans _qproj.LMS25R_ par exemple) et d'en évaluer la qualité, pour les reads provenant de l'expérience RNA-seq. Les étapes sont les mêmes que précédemment, par contre, pour l'aligenement, l'aligneur devra être choisi avec soins pour prendre en compte la nature des données. Lisez bien l'aide de _qAlign_ Aussi il faudra fournir le fichier _ucsc.hg38.chr17.symbol.gtf_ contenant l'annotation des gènes, il se trouve dans _data_. Vous aurez besoin d'un fichier permettant a QuasR de localiser les fastq relatifs au RNA-seq ( _samples\_LMS25R.tab_ ). 
+
+
+Conseils: Repérer les étapes nécessaires: 1. Préparer le fichier contenant les chemins vers les fastq, _QuasR_samples_RNAseq.txt_ par exemple, 2. Allouer à des variables les chemins vers ce fichier et celui d'annotation des gènes (_sampleFile_ et _geneAnnotation_ par exemple), 3. Lancer l'alignement avec _qAlign_, 4. Evaluer la qualité du séquençage et de l'alignement. 6. Refaire la visualisation de la région en ajoutant le RNA-seq.
+ 
+```{r , echo=F}
+targets <- read.delim("data/samples_LMS25R.tab")
+targets$FileName1 <- file.path("data",targets$FileName1)
+targets$FileName2 <- file.path("data",targets$FileName2)
+write.table(targets, "QuasR_samples_RNAseq.txt", row.names=FALSE, quote=FALSE, sep="\t")
+sampleFile <- "QuasR_samples_RNAseq.txt"
+geneAnnotation <- "data/ucsc.hg38.chr17.symbol.gtf"
+qproj.LMS25R <- qAlign(sampleFile, genome=genomeFile, maxHits=1,
+  aligner="Rhisat2", paired="fr", splicedAlignment=TRUE, projectName="LMS25R", 
+  alignmentsDir=results, geneAnnotation=geneAnnotation)
+alignstats <- alignmentStats(qproj.LMS25R)
+alignstats <- as.data.frame(alignstats)
+alignstats$percent.align <- alignstats$mapped/(alignstats$mapped+alignstats$unmapped)
+alignstats
+qQCReport(input=qproj.LMS25R,pdfFilename="results/quasr_qc_reports_RNAseq.pdf")
+bam_files <-  list.files("results",".bam$",full.names = T)
+bam_files
+axisTrack <- GenomeAxisTrack()
+itrack <- IdeogramTrack(genome = "hg38", chromosome = "chr17")
+dTrack1 <- DataTrack(range=bam_files[3], name="Tumor", type="h",ucscChromosomeNames=T,chromosome="chr17",windows=-1)
+dTrack2 <- DataTrack(range=bam_files[1], name="Normal", type="h",ucscChromosomeNames=T,chromosome="chr17",windows=-1)
+dTrack3 <- DataTrack(range=bam_files[2], name="RNA-seq", type="h",ucscChromosomeNames=T,chromosome="chr17",windows=-1)
+txTrack <- GeneRegionTrack(geneAnnotation, name="Transcripts", showId=TRUE,ucscChromosomeNames=T,transcriptAnnotation = "geneid")
+plotTracks(list(itrack,axisTrack, dTrack2, dTrack1,dTrack3, txTrack),
+           chromosome="chr17",from = start(coords), to = end(coords))
+```
+
+**Questions**: 
+
+Quelles sont les différences avec l'analyse de qualité précédentes ? 
+
+Faudrait-il nettoyer les reads ou l'alignement? 
+
+Si vous observez des différences, sont-elles attendues? A quoi serait-elle dues d'après vous ?
+
+Que vous apprend cette figure ? 
+
+Pourquoi le profil est-il différent ? 
+
+
+**Bonus**:  vous pouvez faire le zoom sur une autre région en changeant l'objet _coords_. Par contre il s'agit d'un sous jeu qui comprend seulement le chromosome 17 de la position 7000000 à 13000000. Il y a par exemple le gène TP53 dans cette région, il est intéressant car il est le gène le plus fréquemment altéré dans les LMS, c'est juste un exemple. Les régions observées montrent elles des profils similaires à celui décrit pour la région MYOCD?

@@ -1,0 +1,835 @@
+---
+title: "TD Analyse de données haut débit dans le contexte du cancer de type léiomyosarcomes."
+author: "Elodie Darbo (elodie.darbo@u-bordeaux.fr)"
+vignette: |
+  %\VignetteIndexEntry{Bioconductor style for PDF documents} %\VignetteEngine{knitr ::rmarkdown} %\VignetteEncoding{UTF-8}
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, eval=FALSE)
+knitr::opts_knit$set(root.dir='/Users/elodiedarbo/Documents/TD_ENSTBB/TD_part2')
+```
+
+
+### Contexte
+
+Les léiomyosarcomes (LMS) sont des cancers mésenchimateux rare des tissus mous qui peuvent se développer dans divers sites anatomiques mais le plus souvent dans l'utérus, le rétropéritoine et les membres. Les LMS sont le sous-type le plus agressif des sarcomes des tissus mous avec jusqu'à 50% des patients développent des métastases durant la première année après le diagnostique. Malheureusement, aucune thérapie ciblée ou immunothérapie n'a montré d'effets thérapeutiques majeurs jusqu'à aujourd'hui. Le patients sont donc traités par résection chirurgicale pour les LMS localisés ou par chimiothérapie classique. Les LMS ont une génétique complexe et seulement un faible nombre de voies de signalisation ont été clairement identifiées étant impliquées dans leur oncogenèse mais n'expliquent pas la diversité des phénotypes. 
+Une possibilité d'amélioration de l'efficacité des traitements serait de pouvoir startifier, regrouper les patients suivant des marqueurs spécifiques d'une succeptibilité particulière. 
+
+### But
+
+Durant ce TD, nous allons d'abord rechercher les variations structurales du patient LMS25. Durant le TD précédent nous avons préparé les données issues de séquençage du génome entier (Whole Genome Sequencing: WGS) du tissu sain et tumoral et de son transcriptome afin de pouvoir y détecter des variations succeptibles de provoquer l'apparition du léiomyosarcome chez ce patient.
+
+Nous allons utiliser RStudio pour analyser les variations de nombre de copies de régions chromosomiques à partir de fichiers VCF contenant l'analyse de détection de SNP. Ce type de fichier contient par exemple la couverture de milliers de position qui peut être utilisée pour calculer ces variations.
+
+Nous allons ensuite utiliser des données précalculées de variations de nombres de copies dans une cohorte de 100 patients. Le but est de classer le patients en fonction de leur profil chromosomique.
+
+Toutes les commandes R ainsi que toutes les réponses sont présentes dans ce fichier. Celles-ci sont cachées, vous aurez juste à étendre les sections pour les voir. 
+
+L'idée est que, grâce aux noms des packages et des fonctions spécifiées, vous essayiez par vous mêmes d'écrire les lignes de code et de répondre aux questions. 
+
+**Tips**: Utiliser, dès que vous ne connaissez pas une fonction, l'outil d'aide accessible de plusieurs manières: soit dans le panel en bas à droite de RStudio qui contient un onglet _Help_, soit en tapant dans la console `help("nomDeLaFonction")` ou encore`?NomDeLaFonction`. 
+
+
+### Les données
+
+Dans data/ vous trouverez:
+
+  - 2 objets de tupe .RData: 
+    - VCF_objects.RData qui contient les variants détectés dans la tumeur (vcfT), le normal (vcfC) et le RNA-seq (vcfR) 
+    - CNVs_expression.RData qui contient 4 le résultats de détection du nombre de copies dans 100 patients (CN.chr17), annoRow qui contient la position génomique de gènes, clinical qui contient des informations sur les patients et TCGA.counts qui contient les comptes brut de données de RNA-seq de ces mêmes patients.
+
+### RStudio
+#### Installation de packages
+
+Pour ce TD nous aurons besoin de certains packages qu'il faut intaller.
+
+**DNAcopy**: Ce package permet de segmenter les données de variation de copies et de les visualiser. https://bioconductor.org/packages/release/bioc/html/DNAcopy.html
+
+```{r, echo=T}
+if (!requireNamespace("BiocManager", quietly = TRUE))
+    install.packages("BiocManager")
+BiocManager::install("DNAcopy")
+```
+
+**pheatmap**: permet de visualiser des tableaux contenant des données numériques en colorant les cellules en fonction de la valeur correspondante. Ce package permet aussi de détecter et d'extreaire des sous-groupes présent dans les données.
+
+```{r, echo=T}
+install.packages("pheatmap",dependencies = T)
+```
+
+<!-- **survival**: permet de calculer la différence de durée survie entre deux groupes de patients.
+
+```{r, echo=T}
+install.packages("survival",dependencies = T)
+```
+--->
+#### Setup
+
+Ouvrir RStudio et créer un script (e.g TP_NGS_J2.R) dans lequel vous écrirez les lignes de commandes que vous utiliserez  et les commentaires au fur et à mesure, vous pourrez ainsi vous y référer plus tard si besoin. Ce script devrait être sauvé dans le dossier _scripts/_.
+
+Dans le script nous allons tout d'abord définir le répertoire principal et s'y positionner (`setwd`).
+
+```{r}
+# Définir le répertoire principal votreIdentifiant et CheminJusquAuDosier sont à 
+# modifier pour matcher avec le chemin jusqu'au dossier que vous avez téléchargé.
+setwd("C:/Users/votreIdentifiant/CheminJusquAuDosier") # Windows path
+# ou
+setwd("/home/votreIdentifiant/CheminJusquAuDosier") # Linux/MacOS path
+
+```
+
+#### Charger les données
+Les données ont été pré-calculées et sauvées dans des objets de type .RData présent dans le dossier _data_ ( _VCF\_objects.RData_ et _CNVs_expression.RData_), chargez les grâce à la fonction `load`.
+
+```{r, echo=T, eval=T}
+load(file = "data/VCF_objects.RData")
+load(file = "data/CNVs_expression.RData")
+```
+
+7 objets ont été chargés dans votre environnement
+
+<img src="/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/CNV_1.png" alt="drawing" style="width:500px;"/>
+
+Nous reviendrons sur ce qu'ils contiennent au fur et à mesure du TD.
+
+### Détection des variants structuraux dans le patient LMS25
+
+#### Que sont les variants structuraux ?
+
+<img src="/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/CNV_3.png" alt="drawing" style="width:400px;"/>
+
+Source: https://www.mdpi.com/2079-7737/6/1/21/htm
+
+Les variants structuraux concernent de grandes régions génomiques qui ont été dupliquées ou perdues relativement à un génome de cellule normale.
+
+Dans le cas de gain d'une copies, le nombre de reads détectés dans l'échantillon tumoral sera donc 2 fois supérieur à celui détecté dans le génome normal. Invresement pour la perte de copie. 
+
+A partir de données NGS, cette information, pour chaque échantillon est obtenue à partir de la couverture de chaque position. Nous pouvons alors calculer le ratio entre le nombre de reads alignés dans la tumeur par rapport au tissu sain. 
+
+Nous souhaitons obtenir un graphique permettant de visualiser des changement dans ce ratio, comme dans l'exemple ci-dessous.
+
+<img src="/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/CNV_2.png" alt="drawing" style="width:900px;"/>
+
+Source: https://softgenetics.com/NextGENe_013.php
+
+Le graphique représente une comparaison d'échantillons tumeur-normal. Les régions perdues dans la tumeur sont affichées en rouge. Les régions dupliquées sont affichées en vert (nombre de copies accru dans l'échantillon tumoral). Les régions grises représentent les régions normales.
+
+#### Calculer le logratio tumeur / normal.
+
+Nous allons utiliser les objets `vcfT` (tumeur) et `vcfC` (normal) contenant les variants détectés sur le chromosome 17 entier. 
+
+- Construire une data.frame contenant les positions commune aux 2 table, leur coordonnées génomique et leur couverture.
+
+  1. Que contiennent les objets ? Utiliser la fonction `head` pour afficher les premières lignes.
+  
+<details>
+  <summary>Code: Afficher les premières lignes, Description</summary>
+
+```{r eval=T}
+head(vcfT)
+```
+  
+```
+Chaque ligne correspond à un variant. Pour chaque variant nous connaissons:
+- son identifiant (nom des lignes que nous pouvons utiliser grâce à la fonction row.names)
+- sa localisation: seqnames, start, end
+- sa longueur: width
+- l'allèle de référence et l'allèle variant ou alternatif, REF et ALT
+- la qualité de la position, plus elle est grande meilleure est la qualité, QUAL
+- le nombre de read comportant l'allèle de référence, l'allèle alternatif, la fréquence de l'allèle alternatif et la couverture totale, DP.ref, DP.alt, AF et DP.
+- le génotype: 0/1 la position est hétérozygote, 1/1 la position est homozygote, GT
+- le score représentant la probabilité que le génotype déterminé est adéquat, 99 est le score maximal et repreésente un forte probalitité, GQ
+- si le variant se situe dans un gène, son symbole est noté dans la colonne SYMBOL.
+```
+ </details>
+
+  2. Utiliser le nom des lignes pour identifier les variants communs. Nous allons utiliser la fonction `match`. Regarder l'aide de cette fonction pour en comprendre le fonctionnement. 
+
+Tout d'abord créer une variable contenant le résultat de la fonction `match`
+
+<details>
+  <summary>Code: la fonction match</summary>
+
+```
+D'après l'aide, la fonction match prend au moins 2 arguments qui correspondent à 2 vecteurs à comparer, ici le nom des lignes des 2 tables. La fonction retourne un vecteur de même taille que le premier argument comprenant des NA et des indices. Les positions du vecteur obtenu correspondent aux positions du premier vecteur, si une position contient un NA, cela signifie que l'élément à cette position n'a pas été trouvé dans le second vecteur. Si un indice est présent alors cela signifie que l'élément à cette position est présent dans le second vecteur à l'indice indiqué.
+```
+
+```{r eval=T}
+m <- match(row.names(vcfT), row.names(vcfC))
+```
+
+ </details>
+
+Regarder les premiers éléments du vecteur obtenu, vérifier que tout c'est bien passé en regardant aux indices correspondant entre les 2 vecteurs de noms de lignes.
+
+<details>
+  <summary>Code: vérification</summary>
+
+```{r eval=T}
+head(m) # visualise les 6 premiers éléments
+# la 6ème position du premier argument dans la fonction match
+row.names(vcfT)[6] 
+# correspond au 5ème élément du second vecteur.
+row.names(vcfC)[5]
+# opération logique
+row.names(vcfT)[6] == row.names(vcfC)[5]
+```
+
+ </details>
+
+- Utiliser cette variable pour trier et ordonner les 2 objets.   
+
+Nous ne voulons garder que les lignes étant présentes dans les 2 tables, le vecteur `m` contient des `NA` si la position n'est présente que dans le premier vecteur. Nous allons utiliser la fonction `is.na` qui retourne un vecteur logique (TRUE si la position est un NA et FALSE sinon). Comme nous ne souhaitons pas garder les lignes nous utiliserons l'inverse de ce vecteur (les TRUE deviennent FALSE et vice versa) en ajoutant `!` devant la fonction. Seules les lignes correspondant à TRUE seront gardées.
+
+<details>
+  <summary>Code: Trier la table vcfT</summary>
+
+```{r eval=T}
+vcfT.tri <- vcfT[!is.na(m),]
+dim(vcfT.tri)
+```
+ </details>
+
+Pour trier et ordonner la table vcfC, nous allons utiliser les indices présent dans `m`. Il va falloir éliminer les `NA` grâce à la fonction `na.omit`.  
+
+
+<details>
+  <summary>Code: Trier et ordonner la table vcfC</summary>
+
+```{r eval=T}
+vcfC.tri <- vcfC[na.omit(m),]
+dim(vcfC.tri)
+```
+ </details>
+
+Vérifier que tout s'est bien passé en comparant les noms des lignes des nouvelles tables avec la fonction `all.equal`.
+
+<details>
+  <summary>Code: Vérification</summary>
+
+```{r eval=T}
+all.equal(row.names(vcfT.tri),row.names(vcfC.tri))
+```
+ </details>
+
+ 3. Construire une data.frame nommée `coverage` avec la fonction `data.frame` composée de 4 colonnes (chromosome, pos, tumeur et normal) et contenant les couvertures de ces positions.
+  
+<details>
+  <summary>Code: Construire une data.frame</summary>
+
+```{r eval=T}
+# Comme indiqué plus haut la colonne contenant les couverture se nomme
+# DP
+coverage <- data.frame(chromosome=vcfT.tri$seqnames,pos=vcfT.tri$start, tumeur=vcfT.tri$DP, normal=vcfC.tri$DP)
+head(coverage)
+```
+ </details>
+
+- Calculer le log ratio 
+
+**Rappel**: le génome tumoral a été séquencé 2 fois plus que le génome normal, ceci va impacter le ratio, il va donc falloir ajuster les couvertures.
+
+**Tips**: lorsque nous nous apprétons à transformer des valeurs en logarithme avec la fonction `log2`, il faut penser à rajouter 1 à ces valeurs, en effet cela permet d'éviter de calculer de logarithme de valeur nulle qui tendent vers moins l'infini.
+
+<details>
+  <summary>Code: Calcul du log ratio</summary>
+```{r eval=T}
+# Diviser par 2 la couverture observée dans l'échantillon tumoral
+coverage$tumeur <- coverage$tumeur * 0.5
+# Calcul du log ratio
+logratio <- log2(coverage$tumeur+1) - log2(coverage$normal+1)
+# ajouter la colonne 
+coverage$logratio <- logratio
+```
+ </details>
+
+- Visualiser le résultat
+
+Nous allons construire un plot dont l'axe des abscisses représentera la position sur le chromosome et l'axe des y le logratio des couverture. Pour cela nous allons utiliser la fonction `plot` avec des arguments permetant de personnaliser cette visualisation.
+
+```{r, eval =F}
+# Tout d'abord créons le plot par défaut
+plot(x = coverage$pos, y=coverage$logratio)
+
+# rajoutons des labels aux axes avec xlab et ylab
+plot(x = coverage$pos, y=coverage$logratio, xlab="position", ylab="log ratio couverture tumeur/normal")
+
+# changeons le type de points avec pch et leur taille avec cex
+plot(x = coverage$pos, y=coverage$logratio, xlab="position", ylab="log ratio couverture tumeur/normal", pch=16, cex=0.5)
+
+# ajoutons une ligne horizontale au niveau 0
+plot(x = coverage$pos, y=coverage$logratio, xlab="position", ylab="log ratio couverture tumeur/normal", pch=16, cex=0.5)
+abline(h=0)
+
+# colorons les points en fonction de leur valeur avec col
+# créons d'abord le vecteur contenant les couleurs 
+# (rouge si logratio < -0.5, bleu si supérieur à 1 et gris sinon)
+# construire un vecteur de longueur identique au 
+# nombre de positions contenant la valeur lightgrey pour initialiser 
+# avec la fonction rep
+couleurs <- rep("lightgrey",nrow(coverage))
+# utiliser des vecteur logique pour trier les valeurs
+couleurs[logratio< -0.5] <- "red"
+couleurs[logratio>1] <- "blue"
+plot(x = coverage$pos, y=coverage$logratio, xlab="position", ylab="log ratio couverture tumeur/normal", pch=16, cex=0.5,col=couleurs)
+abline(h=0)
+
+```
+
+
+<details>
+  <summary>Graphique: Profil de variation</summary>
+
+```{r, eval =T, echo=F}
+couleurs <- rep("lightgrey",nrow(coverage))
+# utiliser des vecteur logique pour trier les valeurs
+couleurs[logratio< -0.5] <- "red"
+couleurs[logratio>1] <- "blue"
+plot(x = coverage$pos, y=coverage$logratio, xlab="position", ylab="log ratio couverture tumeur/normal", pch=16, cex=0.5,col=couleurs)
+abline(h=0)
+```
+</details>
+
+Commentez la figure obtenue. Y'a t'il des variants structuraux ? Si oui combien et de quel type ? Pourquoi a-t'on choisi les valeurs -0.5 et 1 pour colorer les positions ? Que représentent-elles ?
+  
+#### Segmenter le profil de variation.
+
+Comme vous l'avez remarqué, des segments apparaissent dans le profil. Définir ces fragments n'est pas aisé, il nous faut utiliser des outils spécifiques, le plus communément utilisé est `DNAcopy`.
+
+Commencer pas charger la library.
+  
+Afin d'utiliser cette méthode il faut d'abord ordonner les positions avec la fonction `order` qui retourne un vecteur de même longueur que le vecteur à ordonner avec des indices correspondant à leur position dans le classement. Créer un vecteur contenant ces indices et appliquer le sur la table `coverage`.
+
+<details>
+  <summary>Code: Ordonner les positions</summary>
+
+```{r, eval =T}
+
+ord <- order(coverage$pos)
+coverage <- coverage[ord,]
+
+```
+</details>
+
+Nous allons utiliser 3 fonctions: `CNA` pour créer un objet interprétable par les fonctions suivantes, `CNA.smooth` pour ajuster les points, `segment` pour  calculer les segments et `plot`pour visualiser le résutat.
+
+Lire l'aide de `CNA` pour écrire la commande, tous les paramètres sont à renseigner. 
+
+Pour les autres fonctions, notamment `smooth.CNA` et `segment`, il y a beaucoup de paramètres assez compliqué, je vous donne donc des exemples de commande, vous pouvez évidemment tester d'autres paramètres pour voir leur effet sur les résultats.
+
+<details>
+  <summary>Code: Calculer les segments</summary>
+
+```{r, eval =T}
+library(DNAcopy)
+CNA.object <-CNA( genomdat = coverage$logratio, 
+                  chrom = coverage$chromosome, 
+                  maploc = coverage$pos, 
+                  data.type = 'logratio',
+                  sampleid="LMS25")
+# Smooth the data: paramètre par défaut
+CNA.smoothed <- smooth.CNA(CNA.object)
+# Find the segment
+segs <- segment(CNA.smoothed, 
+                verbose=1, 
+                min.width=2,undo.splits="sdundo",
+                undo.SD=1.5)
+# plot the results
+plot(segs, plot.type="s")
+```
+</details>
+
+Nous pouvons utiliser les segments calculés pour re-colorer le graphique que nous avions produit tout à l'heure.
+
+Afficher la structure de l'objet `segs` avec la fonction `str`. `segs` est une liste de 4 éléments, nous nous intéressons à l'output qui est une data.frame composée de 20 lignes et 6 colonnes. Que contiennent-elles ?
+
+<details>
+  <summary>Récupérer les segments calculés</summary>
+
+```{r, eval =F}
+str(segs)
+```
+```{r, eval =T}
+# récupérer l'output, c'est aussi le nom de l'élément de la liste
+segs <- segs$output
+head(segs)
+```
+
+</details>
+
+Nous allons nous servir des colonnes loc.start, loc.end et seg.mean afin de colorer les positions. Nous allons utiliser la function `apply` qui permet d'appliquer la même opération sur plusieurs lignes ou colonnes d'un tableau. C'est une fonction compliquée dont la commande est ci-dessous.
+
+```{r, eval=F}
+# initialiser le vesteur de couleur
+couleurs <- rep("lightgrey",nrow(coverage))
+# utiliser chaque ligne de segs pour remplir le vecteur
+# et coverage pour la correspondance entre les coordonnées
+# génomiques les positions dans le vecteur couleurs.
+# je définis une fonction ayant 2 arguments, s qui sera chaque ligne
+# de segs et cov qui sera l'objet coverage
+tmp <- apply(segs[,-(1:2)],1, function(s,cov){
+  # si le segment correspond à une moyenne de log ratio
+  # assez différente de 0 alors
+  if (abs(s[4])>0.3){
+    # creer un vecteur logique filtrant les positions contenues dans 
+    # le segment.
+    in.seg <- cov$pos >= s[1] & cov$pos < s[2]
+    couleurs[in.seg] <<- ifelse(s[4]<0,"red","blue")
+  }
+},cov=coverage)
+
+plot(x = coverage$pos, y=coverage$logratio, xlab="position", ylab="log ratio couverture tumeur/normal", pch=16, cex=0.5,col=couleurs)
+abline(h=0)
+
+```
+
+<details>
+  <summary>Afficher le graphique</summary>
+
+```{r, eval =T,echo=F}
+# initialiser le vesteur de couleur
+couleurs <- rep("lightgrey",nrow(coverage))
+# utiliser chaque ligne de segs pour remplir le vecteur
+# et coverage pour la correspondance entre les coordonnées
+# génomiques les positions dans le vecteur couleurs.
+# je définis une fonction ayant 2 arguments, s qui sera chaque ligne
+# de segs et cov qui sera l'objet coverage
+tmp <- apply(segs[,-(1:2)],1, function(s,cov){
+  # si le segment correspond à une moyenne de log ratio
+  # assez différente de 0 alors
+  if (abs(s[4])>0.3){
+    # creer un vecteur logique filtrant les positions contenues dans 
+    # le segment.
+    in.seg <- cov$pos >= s[1] & cov$pos < s[2]
+    couleurs[in.seg] <<- ifelse(s[4]<0,"red","blue")
+  }
+},cov=coverage)
+
+plot(x = coverage$pos, y=coverage$logratio, xlab="position", ylab="log ratio couverture tumeur/normal", pch=16, cex=0.5,col=couleurs)
+abline(h=0)
+
+```
+
+</details>
+
+  
+Combien de régions varient dans la tumeur ? Quels impacts cela peut-il avoir sur la tumeur ?
+
+A l'aide de l'idéogramme du chromosome 17 ci dessous nommer les régions génomiques variantes pour le patient LMS25. Les positions sur le plot sont ordonnées dans le même sens que sur l'idéogramme.
+
+![Source:https://insb.cnrs.fr/fr/cnrsinfo/le-gene-xaf1-module-le-risque-dapparition-des-cancers-associes-la-mutation-tp53](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/chr17.png)
+
+<details>
+  <summary>Réponse</summary>
+
+```
+Le patient semble avoir perdu la région 5 prime du bras court du chromosome (p) et gagné la région 3 prime des deux bras. L'absence de données au milieu du chromosome correspond au centromère qui est aujourd'hui impossible à analyser du à sa faible complexité (beaucoup de répétitions, les reads n'ont pas de positions uniques).
+```
+</details>
+
+
+### Analyser des variants structuraux dans une cohorte de patients atteints de LMS
+
+Dans cette partie nous allons utiliser les données de variations de nombres de copies dans une population de patients provenant du TCGA (The Cancer Genome Atlas: https://www.cancer.gov/about-nci/organization/ccg/research/structural-genomics/tcga).
+  
+Le but est de visualiser et de classer les patients en fonction de leurs variations génomiques présentent dans le chromosome 17 à l'aide de la fonction `pheatmap` et des objets `CN.chr17`, `clinical` et `annoRow`.
+
+#### Afficher une heatmap
+
+- Ce que nous voulons obtenir
+
+```{r, echo=F, eval=T,message=F,warning=F,fig.height=8}
+library(pheatmap)
+pheatmap(CN.chr17,
+                  annotation_col=clinical[,c("Differentiation","Sex","Location")],
+                  cluster_rows=F, 
+                  annotation_row = annoRow,
+                  show_rownames = F,show_colnames = F,
+                  clustering_method="ward",
+                  color=colorRampPalette(c(colours()[131],colours()[121],"white","red",colours()[35]))(100),silent=T)
+
+CN.chr17p <- CN.chr17[row.names(CN.chr17)%in%row.names(annoRow)[annoRow$arm=="p"],]
+
+clust <- pheatmap(CN.chr17p,
+                  annotation_col=clinical[,c("Differentiation","Sex","Location")],
+                  cluster_rows=F, 
+                  annotation_row = annoRow,
+                  show_rownames = F,show_colnames = F,
+                  clustering_method="ward",
+                  color=colorRampPalette(c(colours()[131],colours()[121],"white","red",colours()[35]))(100),silent=T)
+
+cluster=factor(cutree(clust$tree_col, k = 2))
+clinical$CN.clust <- cluster[match(row.names(clinical),names(cluster))]
+
+pheatmap(CN.chr17p,
+         annotation_col=clinical[,c("Differentiation","Sex","Location","CN.clust")],
+         cluster_rows=F, 
+         annotation_row = annoRow,
+         show_rownames = F,show_colnames = F,
+         clustering_method="ward",
+         color=colorRampPalette(c(colours()[131],colours()[121],"white","red",colours()[35]))(100))
+
+```
+
+
+Cette heatmap représente le nombre de copies par patient (colonnes) et par gène (lignes). Les couleurs de cellules indiquent le nombre de copies de gènes détecté dans chaque patient: les valeurs vont de 0 à 4. 0: bleu foncé: perte homozygote (des 2 copies, le gène n'est plus présent dans les cellules), 1: bleu clair: perte hétérozygote (1 copie est perdue), 2: blanc: génotype diploide normal (2 copies du gène), 3: rouge clair: gain d'une copie (génotype triploide), 4: rouge foncé: gain de 2 ou plus de copies (amplification).
+Les lignes sont annotées à gauche de la heatmap. Ces annotations indiquent les bras ainsi que les bandes chormosomiques.
+Les colonnes (patients) sont annoté avec leurs caractéristiques cliniques: la localisation de la tumeur dans le corps, le sexe, le niveau de différentiation de la tumeur et le cluster que nous aurons identifiés.
+Enfin, les colonnes sont clusterisées à l'aide d'un dendogramme qui représente la distance entre les patients.
+
+- charger la librarie
+
+<details>
+  <summary>Code: charger la librairie</summary>
+
+```{r, echo=T, eval=F}
+library(pheatmap)
+```
+
+</details>
+
+- Construire pas à pas une heatmap
+
+Regarder l'aide de la fonction `pheatmap`, référez vous y à chaque étape.
+
+  1. Afficher la heatmap avec les paramètre par défaut à partir de l'objet `CN.chr17`
+
+<details>
+  <summary>Code: heatmap par défaut</summary>
+
+```{r, echo=T, eval=T}
+pheatmap(CN.chr17)
+```
+
+</details>
+
+  2. Enlever le noms des lignes et colonnes
+  
+Le nom des colonnes et des lignes sont illisibles et peu informatifs, identifier et modifier les paramètres permettant de ne plus les afficher.
+
+<details>
+  <summary>Code</summary>
+
+```{r, echo=T, eval=T}
+pheatmap(CN.chr17,
+         show_colnames = F, 
+         show_rownames = F)
+```
+
+</details>
+
+  3. Annoter les lignes 
+  
+Nous souhaitons pouvoir identifier rapidement où se trouvent les gènes présentant des variations. Pour cela nous allons utiliser l'objet `annoRow`.
+Chercher le paramètre permettant de rajouter des annotations aux lignes et y affecter cet objet.
+
+<details>
+  <summary>Code</summary>
+
+```{r, echo=T, eval=T}
+pheatmap(CN.chr17,
+         show_colnames = F, 
+         show_rownames = F,
+         annotation_row = annoRow)
+```
+
+</details>
+
+Commenter la heatmap que vous venez d'obtenir. Pouvez-vous identifier des variations présentent dans plusieurs patients, leurs localisations sur le chromosome et leurs types ?
+
+<details>
+  <summary>Réponse</summary>
+
+```
+Le clustering des lignes montre que les 2 bras du chromosomes sont chacun altéré de façon homogène (annotation arm), nous pouvons facilement observer qu'une partie des patients ont des variations similaires dans le bras court (p). Il semblerait que ces patients ont perdu une partie de ce bras (bleu clair) et gagné ou amplifié une autre (orange et rouge).
+Cependant il est difficile de vraiment connaitre les régions touchées (band) d'autant plus dans le bras long (q) et de savoir si elles sont effectivement consécutives et donc indiquent de grands réarrangements ou des altérations aléatoirement distribuées le long du chromosome.
+```
+
+</details>
+
+
+  4. Garder l'ordre des lignes
+
+Dans le tableau, les lignes sont ordonnées en fonction des positions chromosomiques, cette information est très importante puisqu'elle nous permettra de détecter en un coup d'oeil où se trouvent les variations. 
+Identifier et modifier le paramètre permettant de ne plus appliquer de clustering sur les lignes.
+
+<details>
+  <summary>Code</summary>
+
+```{r, echo=T, eval=T}
+pheatmap(CN.chr17,
+         show_colnames = F, 
+         show_rownames = F,
+         annotation_row = annoRow, 
+         cluster_rows = F)
+```
+
+</details>
+
+Commenter la heatmap que vous venez d'obtenir.
+
+<details>
+  <summary>Réponse</summary>
+
+```
+Nous pouvons maintenant mieux identifier les positions montrant des variations. La région du bras court près du centromère est gagnée dans une partie des patients alors que l'autre et perdue. Il s'agit bien de grands réarrangements, les pertes et gains ne sont pas aléatoirement distribués.
+La méthode de clustering par défaut ne permet pas de grouper les patients montrant des profils de variations similaires.
+```
+
+</details>
+
+  5. Changer la méthode de clustering
+  
+Identifier dans les paramètres celui qui permet de modifier la méthode utilisée pour recontruire le dendogramme. Tester les différentes options et choisir celle qui vous parait le plus appropriée pour grouper les patients montrant des profils de variations similaires.
+La hauteur des branches du dendogramme est proportionnelle à la distance calculer entre les patients ou groupes de patients.
+Plusieurs paramètres pourraient correspondre, lisez bien l'aide, nous ne voulons pas modifier la méthode de calcul des distances entre les patients, quelle est sa valeur par défaut?
+
+<details>
+  <summary>Réponse</summary>
+
+```
+La méthode pour calculer la distance entre les patients (colonnes) utilisée est la distance euclienne.
+```
+</details>
+
+
+
+<details>
+  <summary>Code</summary>
+
+```{r, echo=T, eval=T}
+pheatmap(CN.chr17,
+         show_colnames = F, 
+         show_rownames = F,
+         annotation_row = annoRow, 
+         cluster_rows = F,
+         clustering_method = "ward.D")
+```
+
+</details>
+
+Commenter la heatmap que vous venez d'obtenir. 
+
+<details>
+  <summary>Réponse</summary>
+
+```
+Nous obtenons 2 groupes de patients bien distinct, le premier ne montrant que peu de réarrangements, le second contenant des patients dont le chromosome 17 a été très remanié, surtout le bras court.
+
+```
+</details>
+
+  6. Focus sur le bras court du chromosome 17
+
+Le bras court du chromosome 17 comportent le plus de réarangements et donc d'informations pour classer les patients. Nous allons filtrer le l'objet `CN.chr17` grâce aux informations contenues dans `annoRow` afin d'afficher seulement chr17p.
+Nous allons donc créer des vecteurs logiques en utilisant le noms des gènes contenu dans le noms des lignes de ces 2 objets.
+Pas à pas:
+- dans l'objet annoRow, identifier les lignes correspondant au bras court p. Vous pouvez afficher le début de l'objet pour vous aider.
+
+<details>
+  <summary>Code</summary>
+
+```{r, echo=T, eval=T}
+head(annoRow)
+# la colonne arm contient l'information souhaitée
+genes.in.loc <- annoRow$arm=="p"
+```
+
+</details>
+
+- récupérer le nom des gènes présent dans cette région
+
+<details>
+  <summary>Code</summary>
+
+```{r, echo=T, eval=T}
+genes <- row.names(annoRow)[genes.in.loc]
+# afficher la longueur du vecteur obtenu
+length(genes)
+```
+
+</details>
+
+- trier la table CN.chr17 grâce au vecteur de gène et l'opérateur de comparaison `%in%` qui teste pour chaque élément d'un vecteur (ici le nom des ligne de CN.chr17) si il est présent dans une autre vecteur (ici genes) et retourne un vecteur logique. Seule les position `TRUE` seront gardées.
+
+<details>
+  <summary>Code</summary>
+
+```{r, echo=T, eval=T}
+to.select <- row.names(CN.chr17)%in%genes
+CN.chr17p <- CN.chr17[to.select,]
+```
+
+</details>
+
+  - Afficher le nouvelle heatmap avec les paramètres définis plus haut
+
+<details>
+  <summary>Code</summary>
+
+```{r, echo=T, eval=T}
+pheatmap(CN.chr17p,
+         show_colnames = F, 
+         show_rownames = F,
+         annotation_row = annoRow, 
+         cluster_rows = F,
+         clustering_method = "ward.D")
+```
+
+</details>
+
+
+  7. Annoter les colonnes
+  
+Pour le moment, nous n'avons aucune information sur les patients, nous allons utiliser l'objet `clinical` pur annoter les colonnes.
+
+Tout d'abord afficher le début de cette table avec la fonction `head` et identifier les colonnes qui vous semblent intéressantes à afficher. OS signifie overall survival et indique le temps passé entre le diagnostique du LMS et le dernier contact avec le patient (soit encore en vie: 0, soit mort: 1). MFS signifie Metastasis Free Survival et indique le temps passé entre le diagnostique du LMS et l'apparition d'une métatstase (1) ou le dernier contact (0). Location et Sex contiennent respectivement l'endroit où s'est développé la tumeur et le sexe du patient. Différentiation indique le niveau de différenciation de la tumeur, en fait une tumeur peut présenter un phénotype soit très proche d'une cellule spécialisée dans un organe (par exemple une cellule musculaire) dans ce cas le niveau de différenciation est de 1 ou à l'inverse, les cellule tumorale peuvent ressembler à des cellules souches n'ayant pas de spécifité tissulaire, le score est alors de 3.
+
+<details>
+  <summary>Code</summary>
+
+```{r, echo=T, eval=T}
+head(clinical)
+```
+
+Nous allons garder les colonnes correspondant au sexe, au niveau de différentiation et à la localisation de la tumeur.
+
+```{r, echo=T, eval=T}
+pheatmap(CN.chr17p,
+         show_colnames = F, 
+         show_rownames = F,
+         annotation_row = annoRow, 
+         cluster_rows = F,
+         clustering_method = "ward.D",
+         annotation_col = clinical[,c("Differentiation","Sex","Location")])
+```
+
+</details>
+
+Commenter la heatmap que vous venez d'obtenir. Les patients regroupés semblent-ils avoir des caractéristiques similaires ? Pouvez vous proposer un test statistique qui permettrait de tester si les groupes sont enrichis en caractéristiques particulières ?
+
+<details>
+  <summary>Réponse</summary>
+
+```
+En observant la heatmap, il semblerait que le groupe ayant subit le plus de modification serait plutôt composé de femmes, dont la tumeur se localiserait dans le tronc et serait plutôt différenciée. 
+Pour tester ces hypothèses nous pourrions utiliser un test de Chi2 ou un test de Fisher exact. 
+```
+
+</details>
+
+  8. Optionnel: changer les couleurs des cellules de la heatmap pour correspondre aux conventions.
+  
+Identifier le paramètre à modifier grace à l'aide et y assigner un vecteur contenant les 5 couleurs nécessaires (bleu foncé, bleu clair, blanc, rouge clair, rouge foncé).
+Une fonction très utile existe pour définir les couleurs de son choix, il s'agit de la fonction `colours`. Elle renvoie un vecteur de couleurs dans le quel nous choisissonscell que nous voulons.
+
+![](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/colours.png)
+
+
+Essayer par exemple: `colours()[24]`, que cela retourne t'il? 
+
+<details>
+  <summary>Code</summary>
+
+```{r, echo=T, eval=T}
+pheatmap(CN.chr17p,
+         show_colnames = F, 
+         show_rownames = F,
+         annotation_row = annoRow, 
+         cluster_rows = F,
+         clustering_method = "ward.D",
+         annotation_col = clinical[,c("Differentiation","Sex","Location")],
+         color = c(colours()[131],colours()[121],"white","red",colours()[35]))
+```
+
+</details>
+
+  9. Associer les patients à un groupe
+  
+Nous voulons récupérer l'information du clustering que nous venons d'effectuer et ainsi classer les patients. Pour cela nous allons continuer à utiliser la fonction `pheatmap`. Cette étape est plutôt compliquée, faisons la pas à pas:
+
+
+```{r, echo=T, eval=T}
+# garder l'objet construit par pheatmap dans une variable, 
+# la heatmap ne s'affiche pas grâce à l'argument silent. 
+# Les paramètres de visualisation ne sont pas indispensables ici, 
+# seuls ceux concernant le clustering sont importants.
+clust <- pheatmap(CN.chr17p, clustering_method = "ward.D",silent=T)
+# l'objet clust contient toutes les informations nécessaires au 
+# clustering effectué sur les patients. 
+class(clust)
+# clust est une liste de 4 éléments
+names(clust)
+# celui qui nous intéresse est l'élément tree_col (arbre colonne)
+class(clust$tree_col)
+# tree_col est un objet hclust qui contient les informations 
+# concernant le dendogramme de clustering des patients. Nous
+# pouvons appliquer la fonction cutree pour récupérer les 
+# 2 groupes de patients avec le paramètre k. 
+cluster <- cutree(clust$tree_col, k = 2)
+class(cluster)
+head(cluster)
+# cluster est un vecteur  d'entiers nommé par l'identifiant 
+# des patients (accessible par la fonction names), ici il ne s'agit  
+# pas de mesures mais le catégories, transformons le vecteur en 
+# facteur avec la fonction as.factor
+cluster <- as.factor(cluster)
+head(cluster)
+# Nous voyons qu'un attribut a été ajouter à cet objet, 
+# il s'agit des niveaux présent dans le facteur, nous pouvons les 
+# modifier grâce à la fonction levels
+levels(cluster) # c'est un vecteur de 2 éléments
+levels(cluster) <- c("clusterA","clusterB")
+levels(cluster) 
+head(cluster)
+# Affichons le début des identifiants de patients avec la fonction names
+head(names(cluster))
+# nous voulons rajouter une colonne à clinical contenant l'appartenance des
+# patient à un des cluster
+head(clinical)
+# cluster et clinical ont en commun l'identifiant de patients dans le nom 
+# des ligne pour clinical et le nom des éléments dans cluster
+# en utilisant la fonction match vu précédement, définir un variable 
+# permettant d'ordonner le facteur cluster en fonction de l'ordre 
+# de identifiant dans clinical
+m <- match(row.names(clinical),names(cluster))
+head(m)
+# m contient les indices des élément de cluster ordonnés pour matcher avec
+# les noms des lignes de clinical
+# ajouter une colonne à clinical
+clinical$CN.clust <- cluster[m]
+head(clinical)
+```
+
+Afficher maintenant la heatmap avec cette nouvelle information en ajoutant le nom de la colonne correspondante lors de l'utilisation de l'objet clinical.
+
+<details>
+  <summary>Code</summary>
+
+```{r, echo=T, eval=T}
+pheatmap(CN.chr17p,
+         show_colnames = F, 
+         show_rownames = F,
+         annotation_row = annoRow, 
+         cluster_rows = F,
+         clustering_method = "ward.D",
+         annotation_col = clinical[,c("Differentiation","Sex","Location","CN.clust")],
+         color = c(colours()[131],colours()[121],"white","red",colours()[35]))
+```
+
+</details>
+
+**Question bonus**: D'après le profil de variation du patient LMS25, classez le dans un des 2 groupes. Pouvez vous prédire certaines caractéristiques cliniques pour ce patient?
+
+Nous allons sauver l'objet clinical afin de pouvoir le réutiliser plus tard grâce à la fonction `save`
+
+```{r, echo=T,eval=T}
+save(clinical,file="data/clinical_CN.RData")
+```
+
+
+

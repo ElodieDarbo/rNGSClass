@@ -1,0 +1,420 @@
+---
+title: "TD Analyse de données haut débit dans le contexte du cancer de type léiomyosarcomes."
+author: "Elodie Darbo (elodie.darbo@u-bordeaux.fr)"
+vignette: >
+  %\VignetteIndexEntry{Bioconductor style for PDF documents}
+  %\VignetteEngine{knitr ::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, eval=FALSE)
+knitr::opts_knit$set(root.dir='/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R')
+```
+
+
+
+
+## Contexte
+
+Les léiomyosarcomes (LMS) sont des cancers mésenchimateux rare des tissus mous qui peuvent se développer dans divers sites anatomiques mais le plus souvent dans l'utérus, le rétropéritoine et les membres. Les LMS sont le sous-type le plus agressif des sarcomes des tissus mous avec jusqu'à 50% des patients développent des métastases durant la première année après le diagnostique. Malheureusement, aucune thérapie ciblée ou immunothérapie n'a montré d'effets thérapeutiques majeurs jusqu'à aujourd'hui. Le patients sont donc traités par résection chirurgicale pour les LMS localisés ou par chimiothérapie classique. Les LMS ont une génétique complexe et seulement un faible nombre de voies de signalisation ont été clairement identifiées étant impliquées dans leur oncogenèse mais n'expliquent pas la diversité des phénotypes. 
+Une possibilité d'amélioration de l'efficacité des traitements serait de pouvoir startifier, regrouper les patients suivant des marqueurs spécifiques d'une succeptibilité particulière. 
+
+## But
+
+Durant ce TD, nous allons rechercher les variations génétiques du patient LMS25. Durant le TD précédent nous avons préparé les données issues de séquençage du génome entier (Whole Genome Sequencing: WGS) du tissu sain et tumoral et de son transcriptome afin de pouvoir y détecter des variations succeptibles de provoquer l'apparition du léiomyosarcome chez ce patient.
+
+Nous allons utiliser the Integrative Genome Viewer (IGV) qui est un outil en ligne qui permet de visualiser les reads alignés sur le génome humain version hg38 (_.bam_) et d'observer les variations relatives au génome de référence. 
+
+Nous allons apprendre pas à pas à charger des données, naviguer sur le génome et identifier des variants somatiques ayant un intérêt potentiel pour notre étude. 
+
+## Les données
+
+Dans data/ vous trouverez:
+
+  - 3 fichiers _\*.bam_ correspondant aux 3 echantillons provenant du même individu (tumeur: LMS25T, normal: LMS25C, RNA-seq: LMS25R). Ces fichiers sont identiques à ceux produits lors de la dernière séance. 
+  - Un fichier de résultats de détection de variants dans les 3 échantillons ( _merged_LMS25TCR_haplotycaller.vcf_ ).
+
+
+## Pour commencer
+### Présentation
+
+IGV est un outil intéractif performant et facile à utiliser pour l'exploration visuelle des données génomiques. Il permet l'intégration flexible de tous les types de données courants et de métadonnées génomiques, générées par les chercheurs ou accessibles au public, chargées à partir de sources locales ou du cloud. 
+Cet outil a été développé par le Broad Institute et est disponible dans une version en ligne qui ne nécessite aucune installation en local. 
+
+### Ouvrir l'application IGV-Web
+
+Dans un navigateur web, ouvrez https://igv.org/app.
+
+*Note : Assurez-vous que les popups ne sont pas désactivés dans votre navigateur web, car certaines fonctionnalités reposent sur eux.*
+
+### Charger un génome de référence
+
+L'IGV affiche les données cartographiées aux coordonnées génomiques d'un génome de référence. Lorsque la page IGV-Web se charge pour la première fois, elle chargera le génome de référence par défaut hg19. 
+
+Nous avons aligné les données de séquençage sur une version plus récente du génome humain. Pour charger ce génome, cliquez sur le menu déroulant **Genome** et sélectionnez dans la liste des génomes prédéfinis. De quelle version s'agit-il ? La réponse est inscrite plusieurs fois dans le début de ce document.
+
+*Note : Vous devez d'abord charger le génome de référence, avant de charger les pistes de données (ou data tracks). Le changement de génome effacera toutes les pistes chargées.*
+
+<details>
+  <summary>Charger le génome de référence.</summary>
+  
+  ![Charger le génome de référence.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_1.png)
+ </details>
+
+## Data tracks
+
+### Par défaut
+
+- Le premier track indique la région visualisée sur le génome. Par défaut, tous les chromosomes sont affichés.
+
+- Un track est affiché par défaut, il se nomme _Refseq Genes_, avez vous une idée de ce que représente ce track ?
+
+<details>
+  <summary>Réponse</summary>
+
+```
+La collection Reference Sequence (RefSeq) fournit un ensemble complet, intégré, non redondant et bien annoté de séquences, y compris l'ADN génomique, les transcrits et les protéines. Les séquences RefSeq constituent une base pour les études médicales, fonctionnelles et de diversité. Elles constituent une référence stable pour l'annotation du génome, l'identification et la caractérisation des gènes, l'analyse des mutations et des polymorphismes (en particulier les enregistrements RefSeqGene), les études d'expression et les analyses comparatives.
+
+Ici, nous allons pouvoir observer les modèles de transcrits.
+```
+ </details>
+
+### Charger des tracks
+
+Pour charger des données et des annotations génomiques, cliquez sur le menu déroulant **Tracks** et choisissez soit dans la sélection des tracks prédéfinies, soit dans l'une des options de chargement des fichiers que vous spécifiez.
+
+#### Chargement de vos données
+
+Nous allons tout d'abord visualiser les reads alignés provenant de la tumeur. 
+
+Pour charger des données à partir d'un fichier, utilisez l'option de la partie supérieure du menu : **Local File**. Un sélecteur de fichiers s'affiche et vous pouvez sélectionner des fichiers pour plusieurs pistes, ainsi que les fichiers d'index correspondants.
+
+*Note : Pour les fichiers indexés, par exemple les fichiers BAM, vous devez sélectionner explicitement le fichier d'index en même temps que le fichier de données.*
+
+Le fichier d'alignements relatif à la tumeur se nomment _LMS25T.bam_ et son index _LMS25T.bam.bai_
+
+<img src="/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_2.png" alt="drawing" style="width:500px;"/>
+
+Pour le moment, rien n'est visible dans ce nouveau track nous pouvons lire le message "Zoom in to see features". Allons-y !
+
+### Naviguer sur le génome
+
+IGV-Web fournit plusieurs contrôles de navigation pour spécifier la région génomique à visualiser. Une règle indiquant l'étendue de la région actuelle est affichée sous la barre d'outils, et la taille de la région et ses coordonnées génomiques sont affichées dans la barre d'outils.
+
+- Sélectionnez le chromosome 17, nous avons en effet un sous échantillon de données correspondant à ce chromosome. Le menu déroulant des chromosomes dans la barre d'outils comprend une entrée pour chaque chromosome ou contig du génome de référence actuel. La sélection d'un chromosome dans le menu permet d'afficher le chromosome entier. La règle inclut un idéogramme sur lequel nous pouvons visualiser les bandes chromosomiques.
+
+<details>
+  <summary>Pour information: Que sont les bandes chromosomiques ?</summary>
+```
+Nous avons vu, lors de l'introduction sur le phénotype des cellules cancéreuses, des images de **caryotype**. 
+```
+![Source: http://www.newdalesystems.com/newdale/Resource02/Chromosome.htm.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/caryotype.png)
+```
+Il existe des colorants qui permettent de visualiser la chromatine grâce à leur affinité pour l'ADN et/ou les protéines qui lui sont associées. Le plus couramment utilisé est le Giemsa qui est une association de trois colorants de base et qui donne une coloration rose violacée de la chromatine en lumière visible. 
+On peut alors distinguer les chromosomes par leur taille et leur forme. Cependant, ces critères sont insuffisants pour assurer la reconnaissance et l'interprétation correcte des anomalies chromosomiques. C'est la succession de bandes sombres et claires le long d'un chromosome, identique chez tous les individus pour un chromosome donné, qui  permet une identification précise, selon le mème principe qu'un code à barres. 
+
+Les bandes sombres correspondent à une chromatine plus condensée que celle présente dans les bandes claires. 
+```
+![Source: http://www.newdalesystems.com/newdale/Resource02/Chromosome.htm.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/chromosome_band.png)
+```
+Les chromosomes métaphasiques sont constitués d'un bras court (noté p) et d'un bras long (noté q), reliés entre eux par le centromère qui correspond à un étranglement situé à un niveau variable du chromosome et qui sert de point d'attache au fuseau de division pendant la division cellulaire.
+
+Pour repérer une région spécifique dans un chromosome, une notation conventionnelle est utilisée: par exemple, chr17p12 correspond à la zone 1.2 du bras court du chromosome 17. **Nous utiliserons cette notation lors de l'analyse de variations structurales.**
+```
+ </details>
+
+- En vous aidant du schéma ci-dessous zoomez sur la région chr17p13.1:
+
+![Source:https://insb.cnrs.fr/fr/cnrsinfo/le-gene-xaf1-module-le-risque-dapparition-des-cancers-associes-la-mutation-tp53](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/chr17.png)
+
+
+Pour zoomer, plusieurs méthodes sont possibles:
+
+- Utiliser le curseur de zoom ou les boutons + et - situés à l'extrémité droite de la barre d'outils pour effectuer un zoom avant et arrière.
+
+- Double-cliquer sur le track contenant les gènes, un zoom s'effectuera en se centrant sur le point où vous avez cliqué. Vous pouvez ensuite vous déplacer de droite à gauche en cliquant et glissant sur le track.
+
+- Cliquer entre la règle et l'idéogramme et faire glisser pour balayer la région dans laquelle vous souhaitez zoomer. Quelle est environ la taille de cette région?
+
+<details>
+  <summary>Zoom sur la région d'intérêt.</summary>
+  
+  ![Zoom sur la région d'intérêt.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_3.png)
+  ![Zoom sur la région d'intérêt.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_4.png)
+```  
+  La région fait environ 4 mégabases (Mb, 1 million de paires de bases). Sur l'idéogramme, la fenêtre rouge indique la région du chromosome qui est visualisée.
+```
+ </details>
+
+Nous pouvons maintenant voir le symbole de certains gènes, en fait pour pouvoir observer les reads, nous devons sélectionner des fenêtres d'au plus 30 Kilobases (Kb, 1000 paires de bases). Je vous propose de nous focaliser sur la région: chr17:7656000-7685000. Dans la zone de texte où les coordonnées génomiques sont affichées, vous pouvez saisir les coordonnées de la région que vous souhaitez visualiser. 
+
+Cette région contient un gène de grand intérêt lorsque qu'il s'agit de cancérologie. 
+
+- De quel gène s'agit-il? 
+- En vous référant à l'introduction du premier TD ou en recherchant sur internet, expliquez pourquoi ce gène est si important. 
+- Zoomez jusqu'à que celui occupe toute la fenêtre. 
+
+
+
+<details>
+  <summary>Zoom sur la région d'intérêt.</summary>
+  
+  ![Zoom sur la région d'intérêt.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_5.png)
+```
+En double-cliquant sur le gène TP53, nous pouvons continuer à zoomer jusqu'à que celui-ci occupe toute la fenêtre.
+TP53 est connu comme le gardien du génome, il est impliqué dans la mort cellulaire programmée lorsque l'ADN est trop abimé. Lors de la tumorigénèse, ce gène est fréquemment muté et ne permet plus d'éliminer les cellules ayant accumulé des mutations tout en étant viables. TP53 est l'accronyme de "Tumor Protein 53".
+```
+ </details>
+
+A droite des tracks, lorsque la hauteur du track ne permet pas de visualiser toute l'information, un curseur permet d'aller de haut en bas pour visualiser tout son contenu. Dans le cas du track Refseq Genes, à quoi correspondent les différentes lignes?
+
+Assurez-vous que l'option sélectionnée pour ce track est `Expand`
+
+<img src="/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_11.png" alt="drawing" style="width:150px;"/>
+
+<details>
+  <summary>Réponse.</summary>
+```  
+Chaque ligne correspond à un transcrit alternatif du gène, aussi appelé isoforme. 
+
+```
+ </details>
+
+Le gène est composé de différents éléments représentés par un visuel spécifique. Nommez ces éléments et attribuez-les aux visuels correspondants.
+
+
+<details>
+  <summary>Réponse.</summary>
+```  
+Les gènes codant pour des protéines sont composés de régions transcrites non traduites (ou UTR, untranslated region) en 3 prime et 5 prime, d'exons qui seront traduits en acides amines et d'introns qui seront enlevés lors de la maturation de ARNm (aussi appelé épissage). A noter que certains gènes ne possèdent pas d'introns, cela permet en général une expression plus rapide.
+
+Nous pouvons observer 3 types d'éléments, une ligne et des rectangles de 2 hauteurs différentes.
+
+- En extrémité 3 prime (début du transcrit) et 5 prime (fin du transcrit) nous observons des rectangles de faible hauteur qui correspondent donc aux UTRs.
+- Les rectangles plus haut correspondent aux exons.
+- Les lignes correspondent aux introns.
+- Les flèches présentes dans les exons et introns indiquent le sens de lecture. Un transcrit lu sur le brin sens correspond à des flèches allant de gauche à droite, le 5 prime se trouve alors à gauche.
+```
+ </details>
+
+### Regarder en détail les tracks
+
+- Le track nommé LMS25T.bam est en fait sub-divisé. A quoi correspondent les 2 panels ? A quoi correspondent les nombres sur l'échelle à droite du panel du haut ? 
+
+<details>
+  <summary>Réponse.</summary>
+
+```
+Le panel du haut représente la couverture de cette région par les reads, la hauteur de chaque barre de l'histogramme indique le nombre de reads présent à chaque position. L'échelle permet donc de quantifier cette couverture.
+Le panel du bas représente les reads eux mêmes. Vous pouvez, grâce au curseur se trouvant à droite du track, visualiser l'ensemble des reads aux positions qui vous intéressent.
+```
+ </details>
+
+- En cliquant sur le menu "engrenage" d'un track, on découvre un certain nombre d'attributs. L'ensemble des attributs est déterminé par le type de fichier qui a été chargé dans la piste. Dans le cas d'alignements de séquences en paires à partir d'un fichier BAM, le menu comprend une option `View as pairs`. Vous pouvez tester différents settings, par exemple avec l'attributs `color by`.
+
+<details>
+  <summary>Exemple de setting.</summary>
+  
+  ![Reads en paires colorés selon le sens de lecture.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_6.png)
+```
+Grâce à ces options nous pouvons voir que les reads proviennent aléatoirement des 2 brins ce qui est un signe d'une expérience réussie.
+```
+ </details>
+
+- Certaines positions sont colorées par une ou deux couleurs. A quoi, selon vous, correspondent les couleurs? Pour vous aider, zoomez sur l'une de ces positions pour visualiser environ 200 paires de base (bp). 
+
+- Un track qui était jusqu'alors vide contient maintenant un jeu de 4 couleurs. D'après vous, à quoi correspond-il ? 
+
+- Continuer à zoomer jusqu'à visualiser environ 100 bp. En cliquant sur le menu "engrenage" de ces tracks, 2 options apparaissent, `Reverse` et `Three-frame translation`. Que font ces 2 options ?
+
+- Avec tous les élements recueillis, décrivez chacun des tracks en indiquant ce qu'ils représentent, la signification des couleurs etc., vous pouvez aussi cliquer sur les éléments des tracks, des informations supplémentaires apparaissent. 
+
+<details>
+  <summary>Description des tracks.</summary>
+  
+  ![Génome de référence: zoom ~200 pb.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_8.png)
+```
+Lorsque l'on effectue un zoom suffisant, la track de la séquence du génome de référence apparaît juste en dessous de la règle chromosomique. la séquence est représentée par des barres colorées.
+```
+
+  ![Génome de référence: zoom ~100 bp.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_9.png)
+```
+La séquence est représentée par des lettres colorées : l'adénine (A) en vert, la cytosine (C) en bleu, la guanine (G) en orange, et la thymine (T) en rouge.
+```
+
+  ![Cadres de lecture.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_10.png)
+```
+Sens de lecture. Dans un premier temps, le brin sens / positif est affiché. Cliquez sur "Reverse" pour passer au brin antisens / négatif. Cliquez sur "Forward" pour revenir en arrière.
+
+    Traduction de la séquence. Cliquez sur "Three-frame translation" pour afficher une piste à trois bandes qui montre une traduction dans les 3 cadres de lecture de la séquence d'acides aminés pour la séquence de nucléotides correspondante. La traduction est affichée pour le brin actuel. Les acides aminés sont affichés sous forme de blocs colorés dans des tons de gris alternés. Les méthionines sont colorées en vert, et tous les codons stop sont colorés en rouge. Lorsque vous zoomez à fond, les symboles des acides aminés apparaissent. Cliquez sur Fermer la traduction pour réduire la piste afin d'afficher uniquement la séquence. 
+```
+
+  ![Exemple de position: zoom ~100 pb.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_7bis.png)
+
+```
+Dans cette image, le zoom a été centré sur la position 7674797 du chromosome 17 et comprend 78 bp. Les deux premiers tracks montrent le brin sens et antisens du génome de référence ainsi que leurs traductions en acides aminés (suivant les 3 cadres de lecture possible). Ici, celà n'a pas vraiment de sens puisque la région observée correspond à un intron du gène TP53 et est donc éliminée avant la traduction.
+
+En cliquant sur la barre colorée en bleu, nous obtenons plusieurs informations: la position est couverte par 29 reads, tous ces reads possèdent un C (N représente n'importequelle base, la présence de N signifie que le séquenceur n'a pas su lire la base). En cliquant sur un read, nous obtenons toute les informations concernant la façon dont il a été aligné (la séquence CIGAR, 112M indique qu'il a été aligné sans mismatch sur toute sa longueur, il mesure 112 nucléotides), la qualité d'alignement (255) qui est forte, qu'il est unique et que la séquence read est de bonne qualité (failed QC: No). Nous avons ensuite des informations relative à sa situation dans la paire de reads. Ici, l'autre read dans la paire a aussi été aligné et sa position de début est spécifiée.
+```
+
+
+</detail>
+
+- Que met en évidence la coloration dans le track d'alignement ?
+
+<details>
+  <summary>Réponse</summary>
+
+  ![Exemple de position: zoom ~100 pb.](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_7.png)
+```
+La position encadrée en rouge met en évidence une barre bleue dans la couverture et la base C dans les reads alors que nous attendions un T à cette position. Il s'agit donc d'un variant génétique relativement au génome de référence.
+```
+ </details>
+
+### Investigation sur le gène d'intérêt
+
+Le but ici est d'identifier un variant génétique dans le gène TP53 pouvant présenter un intérêt dans l'étude de ce léiomyosarcome.
+
+- Tout d'abord revenez à une visualisation complète du gène. Dans la zone de texte où les coordonnées génomiques sont affichées, vous pouvez y renseigner le symbole d'un gène et zoomer sur le gène. 
+
+En l'état actuel, les variations sont difficilement identifiable du à la couleur des reads et de la couverture, en particulier la couleur associée à la base A. Changeons la couleur du track et des reads en utilisant les options du track.
+
+<details>
+  <summary>Changer la couleur des tracks.</summary>
+
+  ![](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_12.png)
+ </details>
+
+- Quelles caractéristiques devraient présenter une telle variation ?
+
+  1. Dans quel type de région du gène une variation risque d'avoir un impact sur la fonction de la protéine codée par ce gène ?
+  
+<details>
+  <summary>Réponse.</summary>
+```
+Une variation a plus de risque de perturber la fonction ou la conformation de la protéine si elle se trouve dans un exon  (elle peut modifier la séquence en acides aminés ou introduire un codon stop) ou à une jonction intron/exon altérant ainsi le processus d'épissage. Les variations dans les introns peuvent aussi avoir des impacts car ils contiennent des éléments régulateurs de la transcription mais nous ne nous intéressons pas à ce cas ici.
+```
+
+</details>
+
+  2. Identifiez une variation située dans une de ces régions et décrivez la (couverture de la position, base attendue, fréquence de la ou des base(s) identifiée(s) dans les reads). S'agit-il d'une variation hétérozygote ou homozygote ? Que cela implique t'il ?
+  
+  
+<details>
+  <summary>Réponse.</summary>
+```
+Dans ce patient, 2 positions juxtaposées se situent dans un exon et pourraient avoir un impact. Il s'agit des positions 7674221 et 7674222. 
+17 reads couvrent ces positions. Nous attendions un G à ces positions et les reads présentent 53% de A et 47 % de G. Il s'agit donc de variations hétérozygotes puisque 2 allèles différents sont présents dans les reads. Cela implique qu'une version non muté de ce gène coexiste avec la version mutée, un des allèles est encore sauvage et suivant l'allèle exprimé, la mutation pourrait n'avoir que peu d'effet.
+```
+![](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_13.png)
+
+</details>
+
+   3. Comme nous le savons, 1/1000 nucléotide diffère entre les individus de façon naturelle car ces variations n'ont pas d'impact sur les phénotypes, ces variations sont nommées "polymorphismes". La référence du génome utilisée est une des versions du génome possibles. Il se pourrait qu'il s'agisse d'un polymorphisme. Avec les données à votre disposition dans le dossier _data_, ajoutez un track permettant de savoir si il s'agit d'une variation présente originellement dans le génome du patient. 
+
+<details>
+  <summary>Importer les données adéquates</summary>
+```
+Les fichiers permettant de répondre à cette question contiennent les reads alignés provenant du tissu normal. Il s'agit de LMS25C.bam et son index LMS25C.bam.bai
+```
+![](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_14.png)
+
+</details>
+
+S'agit-il d'un polymorphisme ou d'une mutation somatique ? Vous souvenez vous de ce que signifie "somatique" et pourquoi ces variations existent ?
+
+<details>
+  <summary>Définition</summary>
+
+```
+Une mutation somatique est une mutation acquise par le patient durant sa vie. Ces mutations viennent d'un défaut de réplication ou de l'action d'un mutagène extérieur tel que le tabac ou le soleil. Ces mutation n'impacte pas la viabilité de la cellules, n'ont pas été normalement réparées avant la mitose. Cette mutation est seulement présente dans cette cellule et ses filles.
+```
+</details>
+
+Note: Personnaliser les options des tracks pour une meilleure visibilité. Par exemple, enlever les reads alignés. Pour le nouveau track n'oubliez pas de changer la couleur du tracks pour mettre en évidence les positions variables.
+
+<details>
+  <summary>Réponse</summary>
+![](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_15.png)
+
+```
+La variation n'est pas présente dans l'échantillon normal, c'est donc une mutation somatique acquise durant la vie du patient qui n'était pas présente dans la lignée germinale.
+```
+
+</details>
+
+  4. Comme nous l'avons observé, la mutation ne concerne qu'un seul des 2 allèles présents dans les cellules tumorales. Le risque que la mutation ait un effet délétaire dépend de son expression. Comme précédemment, ajoutez le track permettant de vérifier cette caractéristique à partir des données à votre disposition dans le dossier _data_. Le gène TP53 est-il exprimé ? Que pouvez vous conclure de vos observations ?
+  
+<details>
+  <summary>Réponse</summary>
+![](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_16.png)
+
+```
+Les variations sont présentes dans les données provenant du RNA-seq (LMS25R.bam), les mutations sont donc exprimées. Les 2 allèles sont transcrits et coexistent.
+```
+</details>
+
+  5. Les mutations ont elles un impact sur la protéine produite ? 
+
+**Attention**: Notez bien le sens de lecture du gène pour vous référer à la séquence du génome qui a effectivement codé pour le transcrit.
+
+**Rappel**: Le brin codant n'est pas le brin qui est lu et complémenté durant la transcription. L'ARN transcrit est identique au brin codant (mis à part l'uracile U à la place de la thymine T) et complémentaire du brin transcrit. La transcription s'effectue toujours de 5 prime vers 3 prime.
+
+<img src="/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/transcription.png" alt="drawing" style="width:500px;"/>
+
+Source: https://b.21-bal.com/law/3735/index.html
+
+Par convention, les séquences représentent toujours le brin codant, c'est pour cela que nous pouvons directement associer les acides aminés aux codons. 
+
+  - Identifiez la phase de lecture en regardant où commence l'exon. Quels acides aminés était attendu ? En activant le bouton `Cursor Guide`, qui devient alors foncé, une ligne verticale est associé au curseur et peut vous aider à identifier le bon cadre de lecture.
+
+Ci dessous, une table de conversion codon / acide aminé (et leur symbole).
+
+<details>
+  <summary>Table de conversion codons / AA </summary>
+
+<img src="/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/aa_code.png" alt="drawing" style="width:500px;"/>
+
+Source: http://morissardjerome.free.fr/infobiogen/www.infobiogen.fr/doc/documentscd9e.html?cours=data
+
+</details>
+
+<details>
+  <summary>Réponse</summary>
+![](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_17.png)
+
+```
+Afin d'obtenir le bon résultat il fallait:
+1/ Afficher le brin antisens en sélectionnant "Reverse" puisque TP53 est codé à partir de celui ci (les flèches dans le modèle de gène vont de la droite vers la gauche).
+2/ Identifier où l'exon commence exactement, ceci défini le premier nucléotide du premier codon traduit dans cet exon. Dans le cas ci dessus il s'agit de la 3ème ligne. Le premier acide aminé codé par cet exon est Y (une Tyrosine).
+
+Les nucléotides mutés touchent 2 codons différents codant pour une Arginine (R) à la position 7674221 et une Asparagine (N) à la position 7674222.
+```
+</details>
+
+  - Quels acides aminés résultent de ces mutations ? Aidez vous de la table de conversion.
+  
+**Atention**: Les bases affichées dans les tracks d'alignement correspondent au brin sens.
+
+<details>
+  <summary>Réponse.</summary>
+
+```
+Pour la position 7674221: Le C a été modifié en T (toutes 2 des pyrimidines) le codon CGG devient donc TGG. Un Tryptophane sera donc produit à la place de l'Arginine. C'est une mutation que l'on appelle non-synonyme et qui va avoir un impact fort sur la protéine.
+Pour la position 7674222: Le C a été modifié en T, le codon AAC devient AAT qui code tous les 2 pour Une Asparagine. C'est une mutation que l'on appelle synonyme et qui va n'avoir aucun impact sur la séquence protéique.
+```
+</details>
+
+**Exercice** (les réponse ne sont pas disponibles ici.)
+
+  6. Rechercher des informations relative à ce variant: e.g. cette mutation est-elle connue, quel est son identifiant, est elle pathogène, a-t'elle été décrite dans les sarcomes (tissus mous) et dans d'autres cancers, quel est son impact sur la fonction de la protéine? 
+
+Pour répondre à ces questions, nous allons charger un dernier track à partir du fichier _merged_LMS25TCR_haplotycaller.vcf_. Ce fichier regroupe les résultats de la détection de variants effectuées avec GATK HaplotypeCaller (https://gatk.broadinstitute.org/hc/en-us/articles/360037422451-HaplotypeCaller ) effectuée sur les 3 échantillons.
+
+![](/Users/elodiedarbo/Documents/TD_ENSTBB/TD_suite_R/scripts/IGV_18.png)
+
+N'hésitez pas à cliquer sur les éléments de ce track, des fenêtres apparaissent vous donnant des indications ainsi que des liens vers des bases de données ou site contenant des informations.
+
+Pour cet exercice, il vous faut être curieux, rechercher sur le net les termes et accronymes que vous ne connaissez pas. Par exemple, une des fenêtres qui s'affiche lorsque vous cliquez dessus indique que le variant à un GQ égal à 99, quelle information cela nous donne t-il? Toutes les informations cependantes ne sont pas de grand intérêt. **Faites un sommaire des informations pertinentes que vous aurez recueillies.**
