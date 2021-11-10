@@ -1,8 +1,11 @@
 # NGS data analysis practical material (R, IGV webtool)
 
+Il s'agit d'un TD en 3 parties codé en Rmarkdown. Data are available at [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5665993.svg)](https://doi.org/10.5281/zenodo.5665993) upon request.
+
+
 ## Contexte
 
-Les léiomyosarcomes (LMS) sont des cancers mésenchimateux rare des tissus mous qui peuvent se développer dans divers sites anatomiques mais le plus souvent dans l’utérus, le rétropéritoine et les membres. Les LMS sont le sous-type le plus agressif des sarcomes des tissus mous avec jusqu’à 50% des patients développent des métastases durant la première année après le diagnostique. Malheureusement, aucune thérapie ciblée ou immunothérapie n’a montré d’effets thérapeutiques majeurs jusqu’à aujourd’hui. Le patients sont donc traités par résection chirurgicale pour les LMS localisés ou par chimiothérapie classique. Les LMS ont une génétique complexe et seulement un faible nombre de voies de signalisation ont été clairement identifiées étant impliquées dans leur oncogenèse mais n’expliquent pas la diversité des phénotypes. Une possibilité d’amélioration de l’efficacité des traitements serait de pouvoir startifier, regrouper les patients suivant des marqueurs spécifiques d’une succeptibilité particulière.
+Les léiomyosarcomes (LMS) sont des cancers mésenchymateux rares des tissus mous qui peuvent se développer dans divers sites anatomiques mais le plus souvent dans l’utérus, le rétropéritoine et les membres. Les LMS sont le sous-type le plus agressif des sarcomes des tissus mous avec jusqu’à 50% des patients développent des métastases. Malheureusement, aucune thérapie ciblée ou immunothérapie n’a montré d’effets thérapeutiques majeurs jusqu’à aujourd’hui. Le patients sont donc traités par résection chirurgicale pour les LMS localisés ou par chimiothérapie classique. Les LMS ont une génétique complexe et seulement un faible nombre de voies de signalisation ont été clairement identifiées étant impliquées dans leur oncogenèse mais n’expliquent pas la diversité des phénotypes. Une possibilité d’amélioration de l’efficacité des traitements serait de pouvoir startifier, regrouper les patients suivant des marqueurs spécifiques d’une succeptibilité particulière.
 
 Vous aurez dans ce TD toutes les commandes R ainsi que toutes les réponses. Celles-ci sont cachées, vous aurez juste à étendre les sections pour les voir.
 
