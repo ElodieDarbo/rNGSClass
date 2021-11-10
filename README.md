@@ -41,15 +41,15 @@ Nous allons ensuite utiliser des données précalculées de variations de nombre
 
 Durant ce TD, Nous allons analyser les groupes de patients que nous avons identifiés précédemment lors de l’analyse de variations de nombres de copies.
 
-    Les patients groupés ont ils des caractéristiques communes ?
+- Les patients groupés ont ils des caractéristiques communes ?
 
 Nous allons calculer l’enrichissement en caractéristiques cliniques pour chacun de ces groupes et ensuite évaluer si il y a une différence de survie, c’est à dire si un de ses groupes est atteint d’une tumeur plus agressive que l’autre.
 
-    Est ce que la variation du nombre de copies a un impact sur l’expression de ces gènes ?
+- Est ce que la variation du nombre de copies a un impact sur l’expression de ces gènes ?
 
 Nous allons utiliser des données de RNA-seq provenant du TCGA [The Cancer Genome Atlas] (https://www.cancer.gov/about-nci/organization/ccg/research/structural-genomics/tcga). Ces données sont brutes, c’est à dire qu’elles n’ont pas été normalisées, nous allons donc procéder à cette normalisation et regarder si il y a un lien entre le gain ou la perte de copie des gènes et l’expression de ces gènes.
 
-    Pouvons nous identifier des voies biologiques impliquées fréquemment et spécifiquement perturbées dans chaque groupe de patients? Ces voies biologiques peuvent elles être reliées à la cancérogénèse ?
+- Pouvons nous identifier des voies biologiques impliquées fréquemment et spécifiquement perturbées dans chaque groupe de patients? Ces voies biologiques peuvent elles être reliées à la cancérogénèse ?
 
 Nous allons aussi détecter les gènes dont l’expression est significativement différente entre les 2 groupes.
 
