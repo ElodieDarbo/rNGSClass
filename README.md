@@ -1,3 +1,5 @@
+license: [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/)
+
 # NGS data analysis practical material (R, IGV webtool)
 
 Il s'agit d'un TD en 3 parties codé en Rmarkdown. Data are available at [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.5665993.svg)](https://doi.org/10.5281/zenodo.5665993) upon request.
@@ -55,4 +57,4 @@ Nous allons aussi détecter les gènes dont l’expression est significativement
 
 Une fois ces gènes identifiés, nous allons effectuer une analyse fonctionnelle des voies de signalisation, c’est à dire que nous allons évaluer si les gènes dérégulés sont impliqués dans des processus biologiques spécifiques. Pour cela nous allons utiliser un outil en ligne [webgestalt](http://www.webgestalt.org/#).
 
-license: [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/)
+
